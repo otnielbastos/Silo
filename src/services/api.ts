@@ -96,8 +96,15 @@ const api = {
 
 // Função para obter a URL completa de uma imagem (compatibilidade)
 export const getImageUrl = (path: string) => {
-    if (!path) return '';
-    if (path.startsWith('http')) return path;
+    if (!path) {
+        console.warn('getImageUrl: path vazio');
+        return '';
+    }
+    
+    if (path.startsWith('http')) {
+        console.log('getImageUrl: URL absoluta detectada:', path);
+        return path;
+    }
     
     // Obter URL do Supabase das variáveis de ambiente
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
@@ -122,10 +129,15 @@ export const getImageUrl = (path: string) => {
         finalUrl = `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
     }
     
-    // Debug em desenvolvimento
-    if (import.meta.env.DEV) {
-        console.log('getImageUrl debug:', { path, supabaseUrl, baseUrl, finalUrl });
-    }
+    // Debug sempre ativo para investigar o problema
+    console.log('🖼️ getImageUrl debug:', { 
+        path, 
+        supabaseUrl: supabaseUrl ? 'Definida' : 'Não definida', 
+        baseUrl, 
+        finalUrl,
+        isDev: import.meta.env.DEV,
+        mode: import.meta.env.MODE
+    });
     
     return finalUrl;
 };

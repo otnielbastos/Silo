@@ -211,6 +211,20 @@ export function Products() {
                       src={getImageUrl(product.imagem_url)}
                       alt={product.nome}
                       className="w-full h-full object-cover"
+                      onError={(e) => {
+                        console.error('❌ Erro ao carregar imagem:', {
+                          produto: product.nome,
+                          imagem_url: product.imagem_url,
+                          src: getImageUrl(product.imagem_url),
+                          error: e
+                        });
+                      }}
+                      onLoad={() => {
+                        console.log('✅ Imagem carregada com sucesso:', {
+                          produto: product.nome,
+                          src: getImageUrl(product.imagem_url)
+                        });
+                      }}
                     />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
