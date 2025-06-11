@@ -1,11 +1,11 @@
-# Loja Organizada Pro
+# SiloSystem - Loja Organizada Pro
 
 Sistema de gestão completo para lojas, com controle de produtos, estoque, vendas e muito mais.
 
 ## Requisitos
 
 - Node.js & npm - [instale com nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-- XAMPP (ou MySQL instalado separadamente)
+- Supabase (local ou cloud)
 - Git
 
 ## Configuração Inicial
@@ -13,24 +13,36 @@ Sistema de gestão completo para lojas, com controle de produtos, estoque, venda
 1. Clone o repositório:
 ```sh
 git clone <YOUR_GIT_URL>
-cd loja-organizada-pro
+cd Silo
 ```
 
-2. Configure o banco de dados:
-- Inicie o MySQL no XAMPP
-- Acesse o phpMyAdmin (http://localhost/phpmyadmin)
-- Crie um novo banco de dados chamado `loja_organizada`
-- Importe o arquivo `server/database.sql` para criar as tabelas
+2. Configure as variáveis de ambiente:
+Crie um arquivo `.env.local` na raiz do projeto com:
+```env
+# Para desenvolvimento local com Supabase local
+VITE_SUPABASE_URL=http://127.0.0.1:54321
+VITE_SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6ImFub24iLCJleHAiOjE5ODM4MTI5OTZ9.CRXP1A7WOeoJeXxjNni43kdQwgnWNReilDMblYTn_I0
 
-3. Instale as dependências:
+# Para produção, substitua pelos valores do seu projeto Supabase
+# VITE_SUPABASE_URL=https://your-project.supabase.co
+# VITE_SUPABASE_ANON_KEY=your_anon_key
+```
+
+3. Configure o Supabase:
 ```sh
-# Instale as dependências do frontend
-npm install
+# Instalar Supabase CLI (se não tiver)
+npm install -g supabase
 
-# Instale as dependências do backend
-cd server
+# Iniciar Supabase local
+npx supabase start
+
+# Executar migrations e seed
+npx supabase db reset
+```
+
+4. Instale as dependências:
+```sh
 npm install
-cd ..
 ```
 
 ## Como Executar o Projeto
