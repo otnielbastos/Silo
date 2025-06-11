@@ -106,37 +106,34 @@ export const getImageUrl = (path: string) => {
         return path;
     }
     
-    // Obter URL do Supabase das variáveis de ambiente
+    // TESTE: Vamos tentar 3 versões diferentes e ver qual funciona
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-    
-    // Fallback para desenvolvimento local se não houver variável de ambiente
     const baseUrl = supabaseUrl || 'http://127.0.0.1:54321';
     
-    let finalUrl = '';
+    // Versão 1: Como era antes (para desktop local)
+    const urlV1 = `http://127.0.0.1:54321/storage/v1/object/public/uploads/${path}`;
     
-    // Se o path já começa com /uploads (formato: /uploads/produtos/arquivo.jpg)
-    if (path.startsWith('/uploads/')) {
-        // Remove o /uploads/ inicial e usa diretamente
-        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path.replace('/uploads/', '')}`;
-    } 
-    // Se o path já está no formato correto com pasta (ex: produtos/arquivo.jpg)
-    else if (path.includes('/')) {
-        // Já tem algum caminho, usa diretamente
-        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
-    } 
-    // Se é apenas o nome do arquivo, assume que está na pasta produtos
-    else {
-        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
-    }
+    // Versão 2: Com Supabase URL
+    const urlV2 = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+    
+    // Versão 3: Testando sem /storage/v1/object/public (talvez seja só o bucket)
+    const urlV3 = `${baseUrl}/${path}`;
+    
+    let finalUrl = urlV2; // Usar a versão 2 por padrão
     
     // Debug sempre ativo para investigar o problema
-    console.log('🖼️ getImageUrl debug:', { 
-        path, 
-        supabaseUrl: supabaseUrl ? 'Definida' : 'Não definida', 
-        baseUrl, 
-        finalUrl,
-        isDev: import.meta.env.DEV,
-        mode: import.meta.env.MODE
+    console.log('🖼️ getImageUrl TESTE:', { 
+        path,
+        supabaseUrl: supabaseUrl ? supabaseUrl : 'Não definida',
+        'Versão 1 (local)': urlV1,
+        'Versão 2 (supabase)': urlV2,
+        'Versão 3 (direto)': urlV3,
+        'URL escolhida': finalUrl,
+        'Variáveis env': {
+            VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
+            NODE_ENV: import.meta.env.NODE_ENV,
+            MODE: import.meta.env.MODE
+        }
     });
     
     return finalUrl;
