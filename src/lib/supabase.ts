@@ -186,8 +186,22 @@ export interface Auditoria {
 export const getImageUrl = (path: string) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
-  if (path.startsWith('/uploads')) {
-    return `${supabaseUrl}/storage/v1/object/public/uploads${path.replace('/uploads', '')}`;
+  
+  // Usar a mesma lógica da API para consistência
+  const baseUrl = supabaseUrl || 'http://127.0.0.1:54321';
+  
+  // Se o path já começa com /uploads (formato: /uploads/produtos/arquivo.jpg)
+  if (path.startsWith('/uploads/')) {
+    // Remove o /uploads/ inicial e usa diretamente
+    return `${baseUrl}/storage/v1/object/public/uploads/${path.replace('/uploads/', '')}`;
+  } 
+  // Se o path é apenas o nome do arquivo ou já está no formato correto
+  else if (path.includes('/')) {
+    // Já tem algum caminho, assume que está no formato correto
+    return `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+  } 
+  // Se é apenas o nome do arquivo, assume que está na pasta produtos
+  else {
+    return `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
   }
-  return `${supabaseUrl}/storage/v1/object/public/uploads/${path}`;
 }; 
