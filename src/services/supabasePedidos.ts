@@ -1,0 +1,692 @@
+import { supabase } from '../lib/supabase';
+import type { Pedido, ItemPedido } from '../lib/supabase';
+
+interface CriarPedidoData {
+  cliente_id: number;
+  tipo: 'pronta_entrega' | 'encomenda';
+  data_entrega_prevista?: string;
+  horario_entrega?: string;
+  forma_pagamento: string;
+  observacoes?: string;
+  observacoes_producao?: string;
+  itens: Array<{
+    produto_id: number;
+    quantidade: number;
+    preco_unitario: number;
+    desconto_valor?: number;
+    desconto_percentual?: number;
+    tipo_desconto?: 'valor' | 'percentual';
+  }>;
+}
+
+interface AtualizarPedidoData {
+  status?: string;
+  data_entrega_prevista?: string;
+  horario_entrega?: string;
+  observacoes?: string;
+  observacoes_producao?: string;
+}
+
+interface AtualizarPagamentoData {
+  status_pagamento: 'pendente' | 'pago' | 'parcial';
+  valor_pago: number;
+  observacoes_pagamento?: string;
+}
+
+// Função para normalizar status
+const normalizeStatus = (status: string): string => {
+  if (!status || status.trim() === '') {
+    return 'pendente';
+  }
+  return status.toLowerCase().trim();
+};
+
+// Função para validar status
+const isValidStatus = (status: string): boolean => {
+  const validStatuses = [
+    'pendente', 'aprovado', 'aguardando_producao', 'em_preparo', 
+    'em_separacao', 'produzido', 'pronto', 'em_entrega', 
+    'entregue', 'concluido', 'cancelado'
+  ];
+  return validStatuses.includes(normalizeStatus(status));
+};
+
+// Função para gerar próximo número do pedido
+const gerarProximoNumero = async (): Promise<string> => {
+  const { data: ultimoPedido } = await supabase
+    .from('pedidos')
+    .select('numero_pedido')
+    .order('id', { ascending: false })
+    .limit(1)
+    .single();
+
+  if (ultimoPedido?.numero_pedido) {
+    const numero = parseInt(ultimoPedido.numero_pedido.replace('#', '')) + 1;
+    return `#${numero.toString().padStart(3, '0')}`;
+  }
+  
+  return '#001';
+};
+
+// Função para processar entrada automática de estoque (quando produção é finalizada)
+const processarEntradaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[], tipoPedido: string) => {
+  try {
+    console.log(`Processando entrada automática de estoque para pedido ${pedidoId}`);
+    
+    const produtosAfetados = [];
+    
+    for (const item of itens) {
+      const { produto_id, quantidade } = item;
+      
+      // Inserir movimentação de entrada
+      await supabase
+        .from('movimentacoes_estoque')
+        .insert({
+          produto_id,
+          tipo_movimento: 'entrada',
+          quantidade,
+          motivo: 'Produção finalizada - Encomenda',
+          documento_referencia: `#${pedidoId}`,
+          pedido_id: pedidoId,
+          tipo_operacao: 'automatica',
+          tipo_estoque: 'encomenda',
+          data_fabricacao: new Date().toISOString().split('T')[0],
+          observacao: 'Entrada automática por conclusão de produção - ESTOQUE DE ENCOMENDA'
+        });
+      
+      // Atualizar estoque
+      const { data: estoqueAtual } = await supabase
+        .from('estoque')
+        .select('*')
+        .eq('produto_id', produto_id)
+        .single();
+
+      if (estoqueAtual) {
+        await supabase
+          .from('estoque')
+          .update({
+            quantidade_atual: estoqueAtual.quantidade_atual + quantidade,
+            quantidade_encomenda: estoqueAtual.quantidade_encomenda + quantidade,
+            ultima_atualizacao: new Date().toISOString()
+          })
+          .eq('produto_id', produto_id);
+      } else {
+        await supabase
+          .from('estoque')
+          .insert({
+            produto_id,
+            quantidade_atual: quantidade,
+            quantidade_pronta_entrega: 0,
+            quantidade_encomenda: quantidade
+          });
+      }
+      
+      produtosAfetados.push({
+        produto_id,
+        quantidade,
+        operacao: 'entrada',
+        tipo_estoque: 'encomenda'
+      });
+    }
+    
+    // Log da operação
+    await supabase
+      .from('log_operacoes_automaticas')
+      .insert({
+        pedido_id: pedidoId,
+        tipo_operacao: 'entrada_estoque',
+        status_anterior: 'em_preparo',
+        status_novo: 'produzido',
+        produtos_afetados: produtosAfetados,
+        observacoes: 'Entrada automática por conclusão da produção - ESTOQUE DE ENCOMENDA'
+      });
+    
+    console.log(`Entrada automática processada com sucesso para pedido ${pedidoId}`);
+    return true;
+    
+  } catch (error) {
+    console.error('Erro ao processar entrada automática:', error);
+    throw error;
+  }
+};
+
+// Função para processar saída automática de estoque (quando entrega é realizada)
+const processarSaidaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[], tipoPedido: string) => {
+  try {
+    console.log(`Processando saída automática de estoque para pedido ${pedidoId} (tipo: ${tipoPedido})`);
+    
+    const produtosAfetados = [];
+    const tipoEstoque = tipoPedido === 'encomenda' ? 'encomenda' : 'pronta_entrega';
+    
+    for (const item of itens) {
+      const { produto_id, quantidade } = item;
+      
+      // Verificar se há estoque suficiente
+      const { data: estoque } = await supabase
+        .from('estoque')
+        .select('*, produto:produtos(nome)')
+        .eq('produto_id', produto_id)
+        .single();
+      
+      if (!estoque) {
+        throw new Error(`Produto ${produto_id} não encontrado no estoque`);
+      }
+      
+      const quantidadeDisponivel = tipoPedido === 'encomenda' 
+        ? estoque.quantidade_encomenda 
+        : estoque.quantidade_pronta_entrega;
+      
+      if (quantidadeDisponivel < quantidade) {
+        const produtoNome = (estoque.produto as any)?.nome || 'produto';
+        throw new Error(`Estoque insuficiente para ${produtoNome}. Disponível: ${quantidadeDisponivel}, Necessário: ${quantidade}`);
+      }
+      
+      // Inserir movimentação de saída
+      await supabase
+        .from('movimentacoes_estoque')
+        .insert({
+          produto_id,
+          tipo_movimento: 'saida',
+          quantidade,
+          motivo: tipoPedido === 'encomenda' ? 'Entrega - Encomenda' : 'Venda - Pronta Entrega',
+          documento_referencia: `#${pedidoId}`,
+          pedido_id: pedidoId,
+          tipo_operacao: 'automatica',
+          tipo_estoque: tipoEstoque,
+          observacao: 'Saída automática por entrega realizada'
+        });
+      
+      // Atualizar estoque
+      const novoEstoque = {
+        quantidade_atual: estoque.quantidade_atual - quantidade,
+        ultima_atualizacao: new Date().toISOString()
+      } as any;
+
+      if (tipoPedido === 'encomenda') {
+        novoEstoque.quantidade_encomenda = estoque.quantidade_encomenda - quantidade;
+      } else {
+        novoEstoque.quantidade_pronta_entrega = estoque.quantidade_pronta_entrega - quantidade;
+      }
+
+      await supabase
+        .from('estoque')
+        .update(novoEstoque)
+        .eq('produto_id', produto_id);
+      
+      produtosAfetados.push({
+        produto_id,
+        quantidade,
+        operacao: 'saida',
+        tipo_estoque: tipoEstoque
+      });
+    }
+    
+    // Log da operação
+    await supabase
+      .from('log_operacoes_automaticas')
+      .insert({
+        pedido_id: pedidoId,
+        tipo_operacao: 'saida_estoque',
+        status_anterior: 'pronto',
+        status_novo: 'entregue',
+        produtos_afetados: produtosAfetados,
+        observacoes: `Saída automática por entrega - Tipo: ${tipoPedido} - Estoque: ${tipoEstoque}`
+      });
+    
+    console.log(`Saída automática processada com sucesso para pedido ${pedidoId}`);
+    return true;
+    
+  } catch (error) {
+    console.error('Erro ao processar saída automática:', error);
+    throw error;
+  }
+};
+
+export const pedidosService = {
+  // Listar todos os pedidos com itens detalhados
+  async listar(vendedor?: number) {
+    try {
+      let query = supabase
+        .from('pedidos')
+        .select(`
+          *,
+          cliente:clientes(*),
+          itens:itens_pedido(
+            *,
+            produto:produtos(*)
+          )
+        `)
+        .neq('status', 'cancelado');
+      
+      // Adicionar filtro por vendedor se especificado
+      if (vendedor) {
+        query = query.eq('criado_por', vendedor);
+      }
+      
+      const { data: pedidos, error } = await query
+        .order('data_pedido', { ascending: false });
+
+      if (error) {
+        throw new Error('Erro ao buscar pedidos');
+      }
+
+      return {
+        success: true,
+        data: pedidos
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao listar pedidos:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Buscar pedido por ID
+  async buscarPorId(id: number) {
+    try {
+      const { data: pedido, error } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          cliente:clientes(*),
+          itens:itens_pedido(
+            *,
+            produto:produtos(*)
+          )
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error) {
+        throw new Error('Pedido não encontrado');
+      }
+
+      return {
+        success: true,
+        data: pedido
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao buscar pedido:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Criar novo pedido
+  async criar(data: CriarPedidoData, usuarioId: number) {
+    try {
+      const { cliente_id, tipo, data_entrega_prevista, horario_entrega, forma_pagamento, observacoes, observacoes_producao, itens } = data;
+
+      // Validações
+      if (!cliente_id || !forma_pagamento || !itens || itens.length === 0) {
+        throw new Error('Dados obrigatórios não informados');
+      }
+
+      // Verificar se cliente existe
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('id')
+        .eq('id', cliente_id)
+        .single();
+
+      if (!cliente) {
+        throw new Error('Cliente não encontrado');
+      }
+
+      // Calcular valor total
+      let valorTotal = 0;
+      const itensCalculados = itens.map(item => {
+        const desconto = item.tipo_desconto === 'percentual' 
+          ? (item.preco_unitario * (item.desconto_percentual || 0)) / 100
+          : (item.desconto_valor || 0);
+        
+        const precoComDesconto = item.preco_unitario - desconto;
+        const subtotal = precoComDesconto * item.quantidade;
+        valorTotal += subtotal;
+
+        return {
+          ...item,
+          preco_unitario_com_desconto: precoComDesconto,
+          subtotal,
+          desconto_valor: item.desconto_valor || 0,
+          desconto_percentual: item.desconto_percentual || 0,
+          tipo_desconto: item.tipo_desconto || 'valor'
+        };
+      });
+
+      // Gerar número do pedido
+      const numeroPedido = await gerarProximoNumero();
+
+      // Criar pedido
+      const { data: novoPedido, error: pedidoError } = await supabase
+        .from('pedidos')
+        .insert({
+          cliente_id,
+          numero_pedido: numeroPedido,
+          status: 'pendente',
+          tipo,
+          data_entrega_prevista,
+          horario_entrega,
+          valor_total: valorTotal,
+          forma_pagamento,
+          observacoes,
+          observacoes_producao,
+          criado_por: usuarioId
+        })
+        .select()
+        .single();
+
+      if (pedidoError) {
+        throw new Error('Erro ao criar pedido');
+      }
+
+      // Criar itens do pedido
+      const itensParaInserir = itensCalculados.map(item => ({
+        pedido_id: novoPedido.id,
+        produto_id: item.produto_id,
+        quantidade: item.quantidade,
+        preco_unitario: item.preco_unitario,
+        desconto_valor: item.desconto_valor,
+        desconto_percentual: item.desconto_percentual,
+        tipo_desconto: item.tipo_desconto,
+        preco_unitario_com_desconto: item.preco_unitario_com_desconto,
+        subtotal: item.subtotal
+      }));
+
+      const { error: itensError } = await supabase
+        .from('itens_pedido')
+        .insert(itensParaInserir);
+
+      if (itensError) {
+        // Reverter criação do pedido
+        await supabase.from('pedidos').delete().eq('id', novoPedido.id);
+        throw new Error('Erro ao criar itens do pedido');
+      }
+
+      // Para pedidos de pronta entrega, verificar se há estoque suficiente
+      if (tipo === 'pronta_entrega') {
+        for (const item of itens) {
+          const { data: estoque } = await supabase
+            .from('estoque')
+            .select(`
+              quantidade_pronta_entrega,
+              produto:produtos(nome)
+            `)
+            .eq('produto_id', item.produto_id)
+            .single();
+
+          if (!estoque || estoque.quantidade_pronta_entrega < item.quantidade) {
+            const produtoNome = (estoque?.produto as any)?.nome || 'produto';
+            throw new Error(`Estoque insuficiente para ${produtoNome}. Disponível: ${estoque?.quantidade_pronta_entrega || 0}, Necessário: ${item.quantidade}`);
+          }
+        }
+      }
+
+      return {
+        success: true,
+        message: 'Pedido criado com sucesso',
+        data: {
+          id: novoPedido.id,
+          numero_pedido: novoPedido.numero_pedido,
+          valor_total: valorTotal
+        }
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao criar pedido:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Atualizar pedido
+  async atualizar(id: number, data: AtualizarPedidoData) {
+    try {
+      const { status, ...outrosUpdateData } = data;
+
+      // Buscar pedido atual
+      const { data: pedidoAtual, error: pedidoError } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          itens:itens_pedido(*)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (pedidoError || !pedidoAtual) {
+        throw new Error('Pedido não encontrado');
+      }
+
+      let updateData: any = { ...outrosUpdateData };
+
+      // Se status está sendo alterado, validar e processar regras de negócio
+      if (status) {
+        const novoStatus = normalizeStatus(status);
+        
+        if (!isValidStatus(novoStatus)) {
+          throw new Error('Status inválido');
+        }
+
+        updateData.status = novoStatus;
+
+        // Regra: Produção finalizada (em_preparo -> produzido) para encomendas
+        if (pedidoAtual.status === 'em_preparo' && novoStatus === 'produzido' && pedidoAtual.tipo === 'encomenda' && !pedidoAtual.estoque_processado) {
+          await processarEntradaAutomaticaEstoque(id, pedidoAtual.itens, pedidoAtual.tipo);
+          
+          // Marcar que o estoque foi processado para evitar duplicações
+          await supabase
+            .from('pedidos')
+            .update({ estoque_processado: true })
+            .eq('id', id);
+        }
+
+        // Regra: Entrega realizada (pronto -> entregue)
+        if (pedidoAtual.status === 'pronto' && novoStatus === 'entregue') {
+          await processarSaidaAutomaticaEstoque(id, pedidoAtual.itens, pedidoAtual.tipo);
+        }
+
+        // Marcar pagamento como pago se status for entregue ou concluido
+        if ((novoStatus === 'entregue' || novoStatus === 'concluido') && pedidoAtual.status_pagamento === 'pendente') {
+          updateData.status_pagamento = 'pago';
+          updateData.valor_pago = pedidoAtual.valor_total;
+          updateData.data_pagamento = new Date().toISOString();
+        }
+      }
+
+      // Atualizar pedido
+      const { error: updateError } = await supabase
+        .from('pedidos')
+        .update(updateData)
+        .eq('id', id);
+
+      if (updateError) {
+        throw new Error('Erro ao atualizar pedido');
+      }
+
+      return {
+        success: true,
+        message: 'Pedido atualizado com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar pedido:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Cancelar pedido
+  async cancelar(id: number, motivo?: string) {
+    try {
+      const { data: pedido } = await supabase
+        .from('pedidos')
+        .select('status')
+        .eq('id', id)
+        .single();
+
+      if (!pedido) {
+        throw new Error('Pedido não encontrado');
+      }
+
+      if (['entregue', 'concluido', 'cancelado'].includes(pedido.status)) {
+        throw new Error('Não é possível cancelar este pedido');
+      }
+
+      await supabase
+        .from('pedidos')
+        .update({
+          status: 'cancelado',
+          observacoes: motivo ? `CANCELADO: ${motivo}` : 'CANCELADO'
+        })
+        .eq('id', id);
+
+      return {
+        success: true,
+        message: 'Pedido cancelado com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao cancelar pedido:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Atualizar pagamento
+  async atualizarPagamento(id: number, data: AtualizarPagamentoData) {
+    try {
+      const { status_pagamento, valor_pago, observacoes_pagamento } = data;
+
+      const updateData: any = {
+        status_pagamento,
+        valor_pago,
+        observacoes_pagamento
+      };
+
+      if (status_pagamento === 'pago') {
+        updateData.data_pagamento = new Date().toISOString();
+      }
+
+      await supabase
+        .from('pedidos')
+        .update(updateData)
+        .eq('id', id);
+
+      return {
+        success: true,
+        message: 'Pagamento atualizado com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao atualizar pagamento:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Marcar como entregue
+  async marcarEntregue(id: number) {
+    try {
+      return await this.atualizar(id, { status: 'entregue' });
+    } catch (error: any) {
+      throw new Error(error.message || 'Erro ao marcar como entregue');
+    }
+  },
+
+  // Buscar pedidos não entregues
+  async naoEntregues() {
+    try {
+      const { data: pedidos, error } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          cliente:clientes(nome, telefone)
+        `)
+        .in('status', ['pronto', 'em_entrega'])
+        .order('data_pedido', { ascending: true });
+
+      if (error) {
+        throw new Error('Erro ao buscar pedidos não entregues');
+      }
+
+      return {
+        success: true,
+        data: pedidos
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao buscar pedidos não entregues:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Buscar pagamentos pendentes
+  async pagamentosPendentes() {
+    try {
+      const { data: pedidos, error } = await supabase
+        .from('pedidos')
+        .select(`
+          *,
+          cliente:clientes(nome, telefone)
+        `)
+        .eq('status_pagamento', 'pendente')
+        .neq('status', 'cancelado')
+        .order('data_pedido', { ascending: true });
+
+      if (error) {
+        throw new Error('Erro ao buscar pagamentos pendentes');
+      }
+
+      return {
+        success: true,
+        data: pedidos
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao buscar pagamentos pendentes:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Estatísticas
+  async estatisticas() {
+    try {
+      // Total de pedidos
+      const { count: totalPedidos } = await supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .neq('status', 'cancelado');
+
+      // Pedidos pendentes
+      const { count: pedidosPendentes } = await supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['pendente', 'aprovado', 'aguardando_producao', 'em_preparo']);
+
+      // Pedidos entregues
+      const { count: pedidosEntregues } = await supabase
+        .from('pedidos')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['entregue', 'concluido']);
+
+      // Faturamento total
+      const { data: faturamento } = await supabase
+        .from('pedidos')
+        .select('valor_total')
+        .in('status', ['entregue', 'concluido']);
+
+      const faturamentoTotal = faturamento?.reduce((acc, pedido) => acc + pedido.valor_total, 0) || 0;
+
+      return {
+        success: true,
+        data: {
+          total_pedidos: totalPedidos || 0,
+          pedidos_pendentes: pedidosPendentes || 0,
+          pedidos_entregues: pedidosEntregues || 0,
+          faturamento_total: faturamentoTotal
+        }
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao buscar estatísticas:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  }
+}; 
