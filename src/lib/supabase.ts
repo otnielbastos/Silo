@@ -187,21 +187,24 @@ export const getImageUrl = (path: string) => {
   if (!path) return '';
   if (path.startsWith('http')) return path;
   
-  // Usar a mesma lógica da API para consistência
   const baseUrl = supabaseUrl || 'http://127.0.0.1:54321';
   
-  // Se o path já começa com /uploads (formato: /uploads/produtos/arquivo.jpg)
+  // Construir URL baseada no formato do path
+  let finalUrl = '';
+  
   if (path.startsWith('/uploads/')) {
-    // Remove o /uploads/ inicial e usa diretamente
-    return `${baseUrl}/storage/v1/object/public/uploads/${path.replace('/uploads/', '')}`;
-  } 
-  // Se o path já está no formato correto com pasta (ex: produtos/arquivo.jpg)
-  else if (path.includes('/')) {
-    // Já tem algum caminho, usa diretamente
-    return `${baseUrl}/storage/v1/object/public/uploads/${path}`;
-  } 
-  // Se é apenas o nome do arquivo, assume que está na pasta produtos
-  else {
-    return `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
+    // Path já tem /uploads/, usar diretamente
+    finalUrl = `${baseUrl}/storage/v1/object/public${path}`;
+  } else if (path.startsWith('produtos/')) {
+    // Path já tem produtos/, adicionar uploads
+    finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+  } else if (path.includes('/')) {
+    // Path tem subpasta, assumir que está correto
+    finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+  } else {
+    // Apenas nome do arquivo, assumir pasta produtos
+    finalUrl = `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
   }
+  
+  return finalUrl;
 }; 

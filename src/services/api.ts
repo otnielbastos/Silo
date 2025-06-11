@@ -106,34 +106,30 @@ export const getImageUrl = (path: string) => {
         return path;
     }
     
-    // TESTE: Vamos tentar 3 versões diferentes e ver qual funciona
     const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
     const baseUrl = supabaseUrl || 'http://127.0.0.1:54321';
     
-    // Versão 1: Como era antes (para desktop local)
-    const urlV1 = `http://127.0.0.1:54321/storage/v1/object/public/uploads/${path}`;
+    // Construir URL baseada no formato do path
+    let finalUrl = '';
     
-    // Versão 2: Com Supabase URL
-    const urlV2 = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+    if (path.startsWith('/uploads/')) {
+        // Path já tem /uploads/, usar diretamente
+        finalUrl = `${baseUrl}/storage/v1/object/public${path}`;
+    } else if (path.startsWith('produtos/')) {
+        // Path já tem produtos/, adicionar uploads
+        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+    } else if (path.includes('/')) {
+        // Path tem subpasta, assumir que está correto
+        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/${path}`;
+    } else {
+        // Apenas nome do arquivo, assumir pasta produtos
+        finalUrl = `${baseUrl}/storage/v1/object/public/uploads/produtos/${path}`;
+    }
     
-    // Versão 3: Testando sem /storage/v1/object/public (talvez seja só o bucket)
-    const urlV3 = `${baseUrl}/${path}`;
-    
-    let finalUrl = urlV2; // Usar a versão 2 por padrão
-    
-    // Debug sempre ativo para investigar o problema
-    console.log('🖼️ getImageUrl TESTE:', { 
+    console.log('🖼️ getImageUrl:', { 
         path,
-        supabaseUrl: supabaseUrl ? supabaseUrl : 'Não definida',
-        'Versão 1 (local)': urlV1,
-        'Versão 2 (supabase)': urlV2,
-        'Versão 3 (direto)': urlV3,
-        'URL escolhida': finalUrl,
-        'Variáveis env': {
-            VITE_SUPABASE_URL: import.meta.env.VITE_SUPABASE_URL,
-            NODE_ENV: import.meta.env.NODE_ENV,
-            MODE: import.meta.env.MODE
-        }
+        supabaseUrl,
+        finalUrl
     });
     
     return finalUrl;
