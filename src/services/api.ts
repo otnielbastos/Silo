@@ -98,10 +98,13 @@ const api = {
 export const getImageUrl = (path: string) => {
     if (!path) return '';
     if (path.startsWith('http')) return path;
+    
+    const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+    
     if (path.startsWith('/uploads')) {
-        return `http://127.0.0.1:54321/storage/v1/object/public/uploads${path.replace('/uploads', '')}`;
+        return `${supabaseUrl}/storage/v1/object/public/uploads${path.replace('/uploads', '')}`;
     }
-    return `http://127.0.0.1:54321/storage/v1/object/public/uploads/${path}`;
+    return `${supabaseUrl}/storage/v1/object/public/uploads/${path}`;
 };
 
 export default api; 
