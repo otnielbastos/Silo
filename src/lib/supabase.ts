@@ -195,9 +195,9 @@ export const getImageUrl = (path: string) => {
     // Remove o /uploads/ inicial e usa diretamente
     return `${baseUrl}/storage/v1/object/public/uploads/${path.replace('/uploads/', '')}`;
   } 
-  // Se o path é apenas o nome do arquivo ou já está no formato correto
+  // Se o path já está no formato correto com pasta (ex: produtos/arquivo.jpg)
   else if (path.includes('/')) {
-    // Já tem algum caminho, assume que está no formato correto
+    // Já tem algum caminho, usa diretamente
     return `${baseUrl}/storage/v1/object/public/uploads/${path}`;
   } 
   // Se é apenas o nome do arquivo, assume que está na pasta produtos
