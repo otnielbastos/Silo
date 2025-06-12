@@ -107,7 +107,7 @@ function Reports() {
             <BarChart3 className="w-8 h-8" />
             Relatórios
           </h2>
-          <p className="text-gray-600">Análise completa do desempenho da loja</p>
+          <p className="text-gray-600">Análise completa do desempenho da loja - Teste</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline">
