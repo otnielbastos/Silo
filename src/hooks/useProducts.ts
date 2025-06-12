@@ -9,6 +9,8 @@ export interface Product {
   preco_custo: number;
   quantidade_minima: number;
   quantidade_atual: number;
+  quantidade_pronta_entrega: number;
+  quantidade_encomenda: number;
   categoria: string;
   unidade_medida: string;
   tipo_produto: string;

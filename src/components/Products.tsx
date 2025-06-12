@@ -248,8 +248,15 @@ export function Products() {
                       <p className="text-xs text-gray-500">Custo: {formatCurrency(product.preco_custo)}</p>
                     </div>
                     <div className="text-right">
-                      <p className="text-sm font-semibold text-gray-800">{product.quantidade_atual} {product.unidade_medida}</p>
-                      <p className="text-xs text-gray-500">Estoque</p>
+                      <div className="space-y-1">
+                        <p className="text-sm font-semibold text-gray-800">
+                          Total: {product.quantidade_atual} {product.unidade_medida}
+                        </p>
+                        <div className="text-xs text-gray-500 space-y-0.5">
+                          <p>Pronta: {product.quantidade_pronta_entrega || 0}</p>
+                          <p>Encomenda: {product.quantidade_encomenda || 0}</p>
+                        </div>
+                      </div>
                     </div>
                   </div>
                   

@@ -1,44 +1,103 @@
-
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { BarChart3, TrendingUp, DollarSign, Calendar, Download, Filter } from "lucide-react";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, ResponsiveContainer, LineChart, Line, PieChart, Pie, Cell } from "recharts";
+import { relatoriosService } from "@/services/supabaseRelatorios";
 
-export function Reports() {
+function Reports() {
   const [selectedPeriod, setSelectedPeriod] = useState("7d");
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   
-  const salesData = [
-    { day: "Seg", vendas: 180, pedidos: 12 },
-    { day: "Ter", vendas: 240, pedidos: 18 },
-    { day: "Qua", vendas: 320, pedidos: 22 },
-    { day: "Qui", vendas: 280, pedidos: 15 },
-    { day: "Sex", vendas: 450, pedidos: 28 },
-    { day: "Sáb", vendas: 520, pedidos: 35 },
-    { day: "Dom", vendas: 380, pedidos: 25 },
-  ];
+  // Estados para os dados
+  const [dashboardData, setDashboardData] = useState<any>(null);
+  const [salesData, setSalesData] = useState<any[]>([]);
+  const [topProducts, setTopProducts] = useState<any[]>([]);
+  const [paymentMethods, setPaymentMethods] = useState<any[]>([]);
+  const [neighborhoods, setNeighborhoods] = useState<any[]>([]);
 
-  const topProducts = [
-    { name: "Pão Francês", sold: 156, revenue: "R$ 109,20" },
-    { name: "Refrigerante 2L", sold: 45, revenue: "R$ 400,50" },
-    { name: "Leite 1L", sold: 38, revenue: "R$ 220,40" },
-    { name: "Açúcar 1kg", sold: 28, revenue: "R$ 126,00" },
-  ];
+  // Função para carregar todos os dados
+  const carregarDados = async () => {
+    try {
+      setLoading(true);
+      setError(null);
+      
+      // Carregar dados em paralelo
+      const [
+        dashboardResponse,
+        vendasResponse,
+        produtosResponse,
+        pagamentosResponse,
+        bairrosResponse
+      ] = await Promise.all([
+        relatoriosService.obterDashboard(selectedPeriod),
+        relatoriosService.obterVendasPorDia(),
+        relatoriosService.obterTopProdutos(),
+        relatoriosService.obterMetodosPagamento(),
+        relatoriosService.obterPedidosPorBairro()
+      ]);
+      
+      setDashboardData(dashboardResponse);
+      setSalesData(vendasResponse);
+      setTopProducts(produtosResponse);
+      setPaymentMethods(pagamentosResponse);
+      setNeighborhoods(bairrosResponse);
+      
+    } catch (err) {
+      console.error('Erro ao carregar dados dos relatórios:', err);
+      setError('Erro ao carregar dados dos relatórios. Tente novamente.');
+    } finally {
+      setLoading(false);
+    }
+  };
 
-  const paymentMethods = [
-    { name: "PIX", value: 45, color: "#10B981" },
-    { name: "Cartão Crédito", value: 30, color: "#3B82F6" },
-    { name: "Dinheiro", value: 20, color: "#F59E0B" },
-    { name: "Cartão Débito", value: 5, color: "#EF4444" },
-  ];
+  // Carregar dados quando o componente monta ou o período muda
+  useEffect(() => {
+    carregarDados();
+  }, [selectedPeriod]);
 
-  const neighborhoods = [
-    { name: "Centro", orders: 85, percentage: 40 },
-    { name: "Jardim", orders: 52, percentage: 25 },
-    { name: "Vila Nova", orders: 38, percentage: 18 },
-    { name: "Outros", orders: 35, percentage: 17 },
-  ];
+  // Função para calcular variação percentual
+  const calcularVariacao = (atual: number, anterior: number): string => {
+    if (anterior === 0) return "+0%";
+    const variacao = ((atual - anterior) / anterior) * 100;
+    return `${variacao >= 0 ? '+' : ''}${variacao.toFixed(1)}%`;
+  };
+
+  // Função para formatar moeda
+  const formatarMoeda = (valor: number): string => {
+    return new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    }).format(valor);
+  };
+
+  if (loading) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex items-center justify-center h-64">
+          <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="space-y-6 animate-fade-in">
+        <div className="flex flex-col items-center justify-center h-64 text-center">
+          <div className="text-red-500 mb-4">
+            <BarChart3 className="w-16 h-16 mx-auto mb-2" />
+            <p className="text-lg font-medium">{error}</p>
+          </div>
+          <Button onClick={carregarDados} className="bg-blue-600 hover:bg-blue-700">
+            Tentar Novamente
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -87,39 +146,39 @@ export function Reports() {
 
       {/* KPI Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-        {[
+        {dashboardData && [
           {
             title: "Receita Total",
-            value: "R$ 2.890,00",
-            change: "+15.3%",
-            changeType: "positive",
+            value: formatarMoeda(dashboardData.receita_total),
+            change: calcularVariacao(dashboardData.receita_total, dashboardData.receita_anterior),
+            changeType: dashboardData.receita_total >= dashboardData.receita_anterior ? "positive" : "negative",
             icon: DollarSign,
             color: "text-green-600",
             bgColor: "bg-green-100",
           },
           {
             title: "Pedidos",
-            value: "155",
-            change: "+8.2%",
-            changeType: "positive",
+            value: dashboardData.total_pedidos.toString(),
+            change: calcularVariacao(dashboardData.total_pedidos, dashboardData.pedidos_anterior),
+            changeType: dashboardData.total_pedidos >= dashboardData.pedidos_anterior ? "positive" : "negative",
             icon: BarChart3,
             color: "text-blue-600",
             bgColor: "bg-blue-100",
           },
           {
             title: "Ticket Médio",
-            value: "R$ 18,65",
-            change: "+2.1%",
-            changeType: "positive",
+            value: formatarMoeda(dashboardData.ticket_medio),
+            change: calcularVariacao(dashboardData.ticket_medio, dashboardData.ticket_medio_anterior),
+            changeType: dashboardData.ticket_medio >= dashboardData.ticket_medio_anterior ? "positive" : "negative",
             icon: TrendingUp,
             color: "text-purple-600",
             bgColor: "bg-purple-100",
           },
           {
             title: "Taxa Conversão",
-            value: "3.2%",
-            change: "-0.5%",
-            changeType: "negative",
+            value: `${dashboardData.taxa_conversao.toFixed(1)}%`,
+            change: calcularVariacao(dashboardData.taxa_conversao, dashboardData.taxa_conversao_anterior),
+            changeType: dashboardData.taxa_conversao >= dashboardData.taxa_conversao_anterior ? "positive" : "negative",
             icon: Calendar,
             color: "text-orange-600",
             bgColor: "bg-orange-100",
@@ -201,20 +260,26 @@ export function Reports() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {topProducts.map((product, index) => (
-                <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
-                  <div className="flex items-center gap-3">
-                    <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
-                      {index + 1}
+              {topProducts.length > 0 ? (
+                topProducts.map((product, index) => (
+                  <div key={index} className="flex items-center justify-between p-3 bg-gray-50 rounded-lg">
+                    <div className="flex items-center gap-3">
+                      <div className="w-8 h-8 bg-gradient-to-br from-blue-500 to-purple-600 rounded-full flex items-center justify-center text-white font-bold text-sm">
+                        {index + 1}
+                      </div>
+                      <div>
+                        <p className="font-medium text-gray-800">{product.name}</p>
+                        <p className="text-sm text-gray-600">{product.sold} unidades</p>
+                      </div>
                     </div>
-                    <div>
-                      <p className="font-medium text-gray-800">{product.name}</p>
-                      <p className="text-sm text-gray-600">{product.sold} unidades</p>
-                    </div>
+                    <p className="font-bold text-green-600">{product.revenue}</p>
                   </div>
-                  <p className="font-bold text-green-600">{product.revenue}</p>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Nenhum produto vendido no período selecionado</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -222,26 +287,32 @@ export function Reports() {
         {/* Neighborhoods */}
         <Card className="border-0 shadow-md">
           <CardHeader>
-            <CardTitle>Entregas por Bairro</CardTitle>
-            <CardDescription>Distribuição geográfica dos pedidos</CardDescription>
+            <CardTitle>Pedidos por Bairro</CardTitle>
+            <CardDescription>Distribuição geográfica dos pedidos dos últimos 30 dias</CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {neighborhoods.map((neighborhood, index) => (
-                <div key={index} className="space-y-2">
-                  <div className="flex justify-between items-center">
-                    <span className="font-medium text-gray-800">{neighborhood.name}</span>
-                    <span className="text-sm text-gray-600">{neighborhood.orders} pedidos</span>
+              {neighborhoods.length > 0 ? (
+                neighborhoods.map((neighborhood, index) => (
+                  <div key={index} className="space-y-2">
+                    <div className="flex justify-between items-center">
+                      <span className="font-medium text-gray-800">{neighborhood.name}</span>
+                      <span className="text-sm text-gray-600">{neighborhood.orders} pedidos</span>
+                    </div>
+                    <div className="w-full bg-gray-200 rounded-full h-2">
+                      <div
+                        className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
+                        style={{ width: `${neighborhood.percentage}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-gray-500">{neighborhood.percentage}% do total</p>
                   </div>
-                  <div className="w-full bg-gray-200 rounded-full h-2">
-                    <div
-                      className="bg-gradient-to-r from-blue-500 to-purple-600 h-2 rounded-full transition-all duration-500"
-                      style={{ width: `${neighborhood.percentage}%` }}
-                    />
-                  </div>
-                  <p className="text-xs text-gray-500">{neighborhood.percentage}% do total</p>
+                ))
+              ) : (
+                <div className="text-center py-8 text-gray-500">
+                  <p>Nenhum pedido com endereço registrado no período selecionado</p>
                 </div>
-              ))}
+              )}
             </div>
           </CardContent>
         </Card>
@@ -273,3 +344,5 @@ export function Reports() {
     </div>
   );
 }
+
+export default Reports;

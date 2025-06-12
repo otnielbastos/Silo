@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -6,15 +6,20 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Plus, Trash2, Loader2, RefreshCw } from "lucide-react";
 import { OrderItem } from "@/hooks/useOrders";
-import { useProductsForSale } from "@/hooks/useProductsForSale";
+import { useProductsForSale, Product } from "@/hooks/useProductsForSale";
 import { useToast } from "@/hooks/use-toast";
+import { ProductSelect } from "@/components/ProductSelect";
+import { supabase } from "@/lib/supabase";
+
+// A interface Product já inclui os campos de estoque separados
 
 interface OrderItemsProps {
   items: OrderItem[];
   onItemsChange: (items: OrderItem[]) => void;
+  tipoPedido?: 'pronta_entrega' | 'encomenda';
 }
 
-export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
+export function OrderItems({ items, onItemsChange, tipoPedido = 'pronta_entrega' }: OrderItemsProps) {
   const { products, loading: productsLoading, error: productsError, fetchProductsForSale } = useProductsForSale();
   const { toast } = useToast();
   const [newItem, setNewItem] = useState({
@@ -112,13 +117,59 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
     }
   };
 
-  const updateItemProduct = (id: string, productId: number) => {
+  const updateItemProduct = async (id: string, productId: number) => {
     try {
-      const selectedProduct = products.find(p => p.id === productId);
+      let selectedProduct: Product | undefined = products.find(p => p.id === productId);
+      
+      // Se não encontrou nos produtos da lista atual, buscar diretamente no banco
+      if (!selectedProduct) {
+        try {
+          const { data: produto, error } = await supabase
+            .from('produtos')
+            .select(`
+              id,
+              nome,
+              descricao,
+              preco_venda,
+              preco_custo,
+              quantidade_minima,
+              categoria,
+              unidade_medida,
+              tipo_produto,
+              imagem_url,
+              status,
+              estoque:estoque(quantidade_atual, quantidade_pronta_entrega, quantidade_encomenda)
+            `)
+            .eq('id', productId)
+            .single();
+
+          if (produto && !error) {
+            selectedProduct = {
+              id: parseInt(produto.id) || 0,
+              nome: produto.nome || '',
+              descricao: produto.descricao || '',
+              preco_venda: parseFloat(produto.preco_venda) || 0,
+              preco_custo: parseFloat(produto.preco_custo) || 0,
+              quantidade_minima: parseInt(produto.quantidade_minima) || 0,
+              quantidade_atual: produto.estoque?.[0]?.quantidade_atual || 0,
+              quantidade_pronta_entrega: produto.estoque?.[0]?.quantidade_pronta_entrega || 0,
+              quantidade_encomenda: produto.estoque?.[0]?.quantidade_encomenda || 0,
+              categoria: produto.categoria || '',
+              unidade_medida: produto.unidade_medida || 'un',
+              tipo_produto: produto.tipo_produto || '',
+              imagem_url: produto.imagem_url || null,
+              status: produto.status || 'ativo'
+            };
+          }
+        } catch (fetchError) {
+          console.error('Erro ao buscar produto:', fetchError);
+        }
+      }
+
       if (!selectedProduct) {
         toast({
           title: "Produto não encontrado",
-          description: "O produto selecionado não foi encontrado.",
+          description: "O produto selecionado não foi encontrado no banco de dados.",
           variant: "destructive",
         });
         return;
@@ -128,9 +179,9 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
         if (item.id === id) {
           const updated = { 
             ...item, 
-            productId: selectedProduct.id,
-            productName: selectedProduct.nome,
-            unitPrice: Number(selectedProduct.preco_venda) || 0
+            productId: selectedProduct!.id,
+            productName: selectedProduct!.nome,
+            unitPrice: Number(selectedProduct!.preco_venda) || 0
           };
           updated.total = updated.quantity * updated.unitPrice;
           return updated;
@@ -138,6 +189,15 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
         return item;
       });
       onItemsChange(updatedItems);
+      
+      // Mostrar aviso se produto está inativo
+      if (selectedProduct.status === 'inativo') {
+        toast({
+          title: "Produto inativo",
+          description: `O produto "${selectedProduct.nome}" está marcado como inativo.`,
+          variant: "destructive",
+        });
+      }
     } catch (error) {
       console.error('Erro ao atualizar produto do item:', error);
       toast({
@@ -150,6 +210,16 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
 
   const handleProductSelect = (productId: string) => {
     try {
+      if (!productId) {
+        setNewItem(prev => ({
+          ...prev,
+          productId: "",
+          productName: "",
+          unitPrice: 0
+        }));
+        return;
+      }
+
       const selectedProduct = products.find(p => p.id === parseInt(productId));
       if (selectedProduct) {
         setNewItem(prev => ({
@@ -242,40 +312,13 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
       <div className="grid grid-cols-12 gap-2 items-end">
         <div className="col-span-5">
           <Label htmlFor="productSelect" className="text-xs">Produto</Label>
-          <Select value={newItem.productId} onValueChange={handleProductSelect}>
-            <SelectTrigger>
-              <SelectValue placeholder={productsLoading ? "Carregando..." : "Selecione um produto"} />
-            </SelectTrigger>
-            <SelectContent>
-              {productsLoading ? (
-                <div className="p-2 text-center text-sm text-muted-foreground">
-                  <div className="flex items-center gap-2 justify-center">
-                    <Loader2 className="w-4 h-4 animate-spin" />
-                    Carregando produtos...
-                  </div>
-                </div>
-              ) : productsError ? (
-                <div className="p-2 text-center text-sm text-red-500">
-                  Erro ao carregar produtos
-                </div>
-              ) : !products || products.length === 0 ? (
-                <div className="p-2 text-center text-sm text-muted-foreground">
-                  Nenhum produto disponível
-                </div>
-              ) : (
-                products.map((product) => (
-                  <SelectItem key={product.id} value={product.id.toString()}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{product.nome}</span>
-                      <span className="text-xs text-muted-foreground">
-                        R$ {(Number(product.preco_venda) || 0).toFixed(2)} - Estoque: {product.quantidade_atual || 0} {product.unidade_medida || ''}
-                      </span>
-                    </div>
-                  </SelectItem>
-                ))
-              )}
-            </SelectContent>
-          </Select>
+          <ProductSelect
+            value={newItem.productId || ""}
+            onValueChange={handleProductSelect}
+            placeholder={productsLoading ? "Carregando..." : "Selecione um produto"}
+            tipoPedido={tipoPedido}
+            disabled={productsLoading}
+          />
         </div>
         <div className="col-span-2">
           <Label htmlFor="quantity" className="text-xs">Qtd</Label>
@@ -330,26 +373,21 @@ export function OrderItems({ items, onItemsChange }: OrderItemsProps) {
               {items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    <Select 
-                      value={item.productId ? item.productId.toString() : undefined} 
-                      onValueChange={(value) => updateItemProduct(item.id, parseInt(value))}
-                    >
-                      <SelectTrigger className="border-0 p-0 h-auto focus:ring-0">
-                        <SelectValue placeholder="Selecione um produto" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {products.map((product) => (
-                          <SelectItem key={product.id} value={product.id.toString()}>
-                            <div className="flex flex-col">
-                              <span className="font-medium">{product.nome}</span>
-                              <span className="text-xs text-muted-foreground">
-                                R$ {(Number(product.preco_venda) || 0).toFixed(2)} - Estoque: {product.quantidade_atual || 0}
-                              </span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    <div className="border-0 p-0">
+                      <ProductSelect
+                                                  value={item.productId ? item.productId.toString() : ""}
+                                                  onValueChange={(value) => {
+                            if (value && value !== "") {
+                              const productId = parseInt(value);
+                              if (!isNaN(productId)) {
+                                updateItemProduct(item.id, productId);
+                              }
+                            }
+                          }}
+                        placeholder="Selecione um produto"
+                        tipoPedido={tipoPedido}
+                      />
+                    </div>
                   </TableCell>
                   <TableCell>
                     <Input

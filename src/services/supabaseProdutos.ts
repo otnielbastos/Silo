@@ -19,7 +19,10 @@ export const produtosService = {
     try {
       const { data: produtos, error } = await supabase
         .from('produtos')
-        .select('*')
+        .select(`
+          *,
+          estoque:estoque(quantidade_atual, quantidade_pronta_entrega, quantidade_encomenda)
+        `)
         .order('nome');
 
       if (error) throw new Error('Erro ao buscar produtos');
@@ -32,6 +35,9 @@ export const produtosService = {
         preco_venda: parseFloat(produto.preco_venda) || 0,
         preco_custo: parseFloat(produto.preco_custo) || 0,
         quantidade_minima: parseInt(produto.quantidade_minima) || 0,
+        quantidade_atual: produto.estoque?.[0]?.quantidade_atual || 0,
+        quantidade_pronta_entrega: produto.estoque?.[0]?.quantidade_pronta_entrega || 0,
+        quantidade_encomenda: produto.estoque?.[0]?.quantidade_encomenda || 0,
         categoria: produto.categoria || '',
         unidade_medida: produto.unidade_medida || 'un',
         tipo_produto: produto.tipo_produto || '',

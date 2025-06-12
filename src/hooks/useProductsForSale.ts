@@ -9,6 +9,8 @@ export interface Product {
   preco_custo: number;
   quantidade_minima: number;
   quantidade_atual: number;
+  quantidade_pronta_entrega: number;
+  quantidade_encomenda: number;
   categoria: string;
   unidade_medida: string;
   tipo_produto: string;
@@ -36,6 +38,8 @@ export const useProductsForSale = () => {
           ...produto,
           preco_venda: Number(produto.preco_venda) || 0,
           quantidade_atual: Number(produto.quantidade_atual) || 0,
+          quantidade_pronta_entrega: Number(produto.quantidade_pronta_entrega) || 0,
+          quantidade_encomenda: Number(produto.quantidade_encomenda) || 0,
           preco_custo: Number(produto.preco_custo) || 0,
           quantidade_minima: Number(produto.quantidade_minima) || 0
         }));

@@ -19,12 +19,29 @@ interface CriarPedidoData {
   }>;
 }
 
+interface ItemPedidoInput {
+  produto_id: number;
+  quantidade: number;
+  preco_unitario: number;
+  desconto_valor?: number;
+  desconto_percentual?: number;
+  tipo_desconto?: 'valor' | 'percentual';
+}
+
 interface AtualizarPedidoData {
   status?: string;
   data_entrega_prevista?: string;
   horario_entrega?: string;
   observacoes?: string;
   observacoes_producao?: string;
+  itens?: Array<{
+    produto_id: number;
+    quantidade: number;
+    preco_unitario: number;
+    desconto_valor?: number;
+    desconto_percentual?: number;
+    tipo_desconto?: 'valor' | 'percentual';
+  }>;
 }
 
 interface AtualizarPagamentoData {
@@ -69,7 +86,7 @@ const gerarProximoNumero = async (): Promise<string> => {
 };
 
 // Função para processar entrada automática de estoque (quando produção é finalizada)
-const processarEntradaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[], tipoPedido: string) => {
+const processarEntradaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[] | ItemPedidoInput[], tipoPedido: string) => {
   try {
     console.log(`Processando entrada automática de estoque para pedido ${pedidoId}`);
     
@@ -135,7 +152,7 @@ const processarEntradaAutomaticaEstoque = async (pedidoId: number, itens: ItemPe
       .insert({
         pedido_id: pedidoId,
         tipo_operacao: 'entrada_estoque',
-        status_anterior: 'em_preparo',
+        status_anterior: 'qualquer',
         status_novo: 'produzido',
         produtos_afetados: produtosAfetados,
         observacoes: 'Entrada automática por conclusão da produção - ESTOQUE DE ENCOMENDA'
@@ -151,7 +168,7 @@ const processarEntradaAutomaticaEstoque = async (pedidoId: number, itens: ItemPe
 };
 
 // Função para processar saída automática de estoque (quando entrega é realizada)
-const processarSaidaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[], tipoPedido: string) => {
+const processarSaidaAutomaticaEstoque = async (pedidoId: number, itens: ItemPedido[] | ItemPedidoInput[], tipoPedido: string) => {
   try {
     console.log(`Processando saída automática de estoque para pedido ${pedidoId} (tipo: ${tipoPedido})`);
     
@@ -403,7 +420,7 @@ export const pedidosService = {
         throw new Error('Erro ao criar itens do pedido');
       }
 
-      // Para pedidos de pronta entrega, verificar se há estoque suficiente
+      // Para pedidos de pronta entrega, verificar estoque e fazer saída automática
       if (tipo === 'pronta_entrega') {
         for (const item of itens) {
           const { data: estoque } = await supabase
@@ -441,7 +458,7 @@ export const pedidosService = {
   // Atualizar pedido
   async atualizar(id: number, data: AtualizarPedidoData) {
     try {
-      const { status, ...outrosUpdateData } = data;
+      const { status, itens, ...outrosUpdateData } = data;
 
       // Buscar pedido atual
       const { data: pedidoAtual, error: pedidoError } = await supabase
@@ -459,6 +476,76 @@ export const pedidosService = {
 
       let updateData: any = { ...outrosUpdateData };
 
+      // Processar atualização de itens se fornecidos
+      if (itens && itens.length > 0) {
+        console.log(`Atualizando itens do pedido ${id}:`, itens);
+        console.log(`Pedido atual tem ${pedidoAtual.itens?.length || 0} itens`);
+        
+        // Remover itens antigos
+        const { error: deleteError } = await supabase
+          .from('itens_pedido')
+          .delete()
+          .eq('pedido_id', id);
+
+        if (deleteError) {
+          console.error('Erro ao remover itens antigos:', deleteError);
+          throw new Error('Erro ao remover itens antigos');
+        }
+
+        console.log('Itens antigos removidos com sucesso');
+
+        // Calcular novo valor total
+        let valorTotal = 0;
+
+        // Adicionar novos itens
+        for (const item of itens) {
+          const { produto_id, quantidade, preco_unitario, desconto_valor = 0, desconto_percentual = 0 } = item;
+          
+          console.log(`Processando item: produto_id=${produto_id}, quantidade=${quantidade}, preco=${preco_unitario}`);
+          
+          // Verificar se produto existe
+          const { data: produto } = await supabase
+            .from('produtos')
+            .select('id, nome, status')
+            .eq('id', produto_id)
+            .eq('status', 'ativo')
+            .single();
+          
+          if (!produto) {
+            throw new Error(`Produto ${produto_id} não encontrado ou inativo`);
+          }
+
+          const subtotal = quantidade * preco_unitario - (desconto_valor || 0);
+          const precoUnitarioComDesconto = preco_unitario - (desconto_valor || 0);
+          valorTotal += subtotal;
+
+          const { error: insertError } = await supabase
+            .from('itens_pedido')
+            .insert({
+              pedido_id: id,
+              produto_id,
+              quantidade,
+              preco_unitario,
+              preco_unitario_com_desconto: precoUnitarioComDesconto,
+              desconto_valor: desconto_valor || 0,
+              desconto_percentual: desconto_percentual || 0,
+              tipo_desconto: desconto_valor > 0 ? 'valor' : 'percentual',
+              subtotal
+            });
+
+          if (insertError) {
+            console.error('Erro ao inserir item:', insertError);
+            throw new Error(`Erro ao inserir item do produto ${produto.nome}`);
+          }
+
+          console.log(`Item inserido com sucesso: ${produto.nome}`);
+        }
+
+        // Atualizar valor total do pedido
+        updateData.valor_total = valorTotal;
+        console.log(`Novo valor total calculado: R$ ${valorTotal.toFixed(2)}`);
+      }
+
       // Se status está sendo alterado, validar e processar regras de negócio
       if (status) {
         const novoStatus = normalizeStatus(status);
@@ -469,27 +556,28 @@ export const pedidosService = {
 
         updateData.status = novoStatus;
 
-        // Regra: Produção finalizada (em_preparo -> produzido) para encomendas
-        if (pedidoAtual.status === 'em_preparo' && novoStatus === 'produzido' && pedidoAtual.tipo === 'encomenda' && !pedidoAtual.estoque_processado) {
-          await processarEntradaAutomaticaEstoque(id, pedidoAtual.itens, pedidoAtual.tipo);
+        // Buscar itens atualizados para processamento de estoque
+        const itensParaProcessamento = itens || pedidoAtual.itens;
+
+        // Regra: Produção finalizada (qualquer status -> produzido) para encomendas
+        if (novoStatus === 'produzido' && pedidoAtual.tipo === 'encomenda' && !pedidoAtual.estoque_processado) {
+          console.log(`Processando entrada automática para pedido ${id}: ${pedidoAtual.status} -> ${novoStatus}`);
+          await processarEntradaAutomaticaEstoque(id, itensParaProcessamento, pedidoAtual.tipo);
           
           // Marcar que o estoque foi processado para evitar duplicações
-          await supabase
-            .from('pedidos')
-            .update({ estoque_processado: true })
-            .eq('id', id);
+          updateData.estoque_processado = true;
         }
 
-        // Regra: Entrega realizada (pronto -> entregue)
-        if (pedidoAtual.status === 'pronto' && novoStatus === 'entregue') {
-          await processarSaidaAutomaticaEstoque(id, pedidoAtual.itens, pedidoAtual.tipo);
+        // REGRA 1: Encomenda - Saída automática quando sai de "produzido" para "entregue"
+        if (pedidoAtual.status === 'produzido' && novoStatus === 'entregue' && pedidoAtual.tipo === 'encomenda') {
+          console.log(`Processando saída automática para encomenda ${id}: produzido -> entregue`);
+          await processarSaidaAutomaticaEstoque(id, itensParaProcessamento, pedidoAtual.tipo);
         }
 
-        // Marcar pagamento como pago se status for entregue ou concluido
-        if ((novoStatus === 'entregue' || novoStatus === 'concluido') && pedidoAtual.status_pagamento === 'pendente') {
-          updateData.status_pagamento = 'pago';
-          updateData.valor_pago = pedidoAtual.valor_total;
-          updateData.data_pagamento = new Date().toISOString();
+        // REGRA 2: Pronta Entrega - Saída automática quando status for "entregue"
+        if (novoStatus === 'entregue' && pedidoAtual.tipo === 'pronta_entrega') {
+          console.log(`Processando saída automática para pronta entrega ${id}: -> entregue`);
+          await processarSaidaAutomaticaEstoque(id, itensParaProcessamento, pedidoAtual.tipo);
         }
       }
 
@@ -555,6 +643,17 @@ export const pedidosService = {
     try {
       const { status_pagamento, valor_pago, observacoes_pagamento } = data;
 
+      // Buscar pedido atual para verificar status e valor total
+      const { data: pedidoAtual, error: pedidoError } = await supabase
+        .from('pedidos')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (pedidoError || !pedidoAtual) {
+        throw new Error('Pedido não encontrado');
+      }
+
       const updateData: any = {
         status_pagamento,
         valor_pago,
@@ -563,6 +662,14 @@ export const pedidosService = {
 
       if (status_pagamento === 'pago') {
         updateData.data_pagamento = new Date().toISOString();
+      }
+
+      // REGRA 3: Conclusão automática quando pagamento integral + status entregue
+      if (status_pagamento === 'pago' && 
+          valor_pago >= pedidoAtual.valor_total && 
+          pedidoAtual.status === 'entregue') {
+        console.log(`Concluindo pedido ${id} automaticamente: pagamento integral + entregue`);
+        updateData.status = 'concluido';
       }
 
       await supabase

@@ -240,13 +240,22 @@ export function useOrders() {
       }
 
       // Mapear dados para formato do backend
-      const backendData = {
+      const backendData: any = {
         status: mapStatusToBackend(orderData.status),
         tipo: orderData.tipo,
         data_entrega_prevista: orderData.data_entrega_prevista,
         horario_entrega: orderData.horario_entrega,
         observacoes_producao: orderData.observacoes_producao,
-        observacoes: orderData.notes
+        observacoes: orderData.notes,
+        // Sempre incluir itens na edição para garantir que novos itens sejam salvos
+        itens: orderData.items.map(item => ({
+          produto_id: item.productId || 0,
+          quantidade: item.quantity,
+          preco_unitario: item.unitPrice,
+          desconto_valor: 0,
+          desconto_percentual: 0,
+          tipo_desconto: 'valor' as const
+        }))
       };
 
       // Buscar ID numérico real do pedido
@@ -261,6 +270,36 @@ export function useOrders() {
       await loadOrders(); // Recarregar lista
     } catch (error: any) {
       console.error('Erro ao atualizar pedido:', error);
+      throw error;
+    }
+  };
+
+  // Atualizar apenas status do pedido (sem processar itens)
+  const updateOrderStatus = async (id: string, status: Order['status']) => {
+    try {
+      // Buscar ID numérico do pedido pelo número
+      const pedido = orders.find(o => o.id === id);
+      if (!pedido) {
+        throw new Error('Pedido não encontrado');
+      }
+
+      // Mapear dados para formato do backend (apenas status)
+      const backendData = {
+        status: mapStatusToBackend(status)
+      };
+
+      // Buscar ID numérico real do pedido
+      const response = await api.pedidos.listar();
+      const pedidoCompleto = response.data.find((p: any) => p.numero_pedido === id);
+      
+      if (!pedidoCompleto) {
+        throw new Error('Pedido não encontrado no servidor');
+      }
+
+      await api.pedidos.atualizar(pedidoCompleto.id, backendData);
+      await loadOrders(); // Recarregar lista
+    } catch (error: any) {
+      console.error('Erro ao atualizar status do pedido:', error);
       throw error;
     }
   };
@@ -420,6 +459,7 @@ export function useOrders() {
     error,
     addOrder,
     updateOrder,
+    updateOrderStatus,
     deleteOrder,
     getOrder,
     refreshOrders,

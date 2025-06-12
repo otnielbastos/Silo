@@ -10,7 +10,7 @@ import { Orders } from "@/components/Orders";
 import { Customers } from "@/components/Customers";
 import { Stock } from "@/components/Stock";
 import { Deliveries } from "@/components/Deliveries";
-import { Reports } from "@/components/Reports";
+import Reports from "@/components/Reports";
 import { Users } from "@/components/Users";
 
 export type ActivePage = 'dashboard' | 'products' | 'orders' | 'customers' | 'stock' | 'deliveries' | 'reports' | 'users';

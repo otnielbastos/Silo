@@ -99,3 +99,44 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Estilos personalizados para scrollbar */
+@layer utilities {
+  /* Scrollbar para Webkit (Chrome, Safari, Edge) */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f5f9;
+    border-radius: 4px;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #cbd5e1;
+    border-radius: 4px;
+    transition: background-color 0.2s ease;
+  }
+
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #94a3b8;
+  }
+
+  /* Scrollbar para Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin;
+    scrollbar-color: #cbd5e1 #f1f5f9;
+  }
+
+  /* Garantir que o scroll do mouse funcione em todos os navegadores */
+  .mouse-scroll-enabled {
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    scroll-behavior: smooth;
+  }
+
+  /* Melhorar a interação com o mouse */
+  .mouse-scroll-enabled:hover {
+    scrollbar-color: #94a3b8 #f1f5f9;
+  }
+}

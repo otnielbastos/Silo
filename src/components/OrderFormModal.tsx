@@ -384,6 +384,7 @@ export function OrderFormModal({ isOpen, onClose, onSubmit, order }: OrderFormMo
               <OrderItems
                 items={formData.items}
                 onItemsChange={(items) => setFormData(prev => ({ ...prev, items }))}
+                tipoPedido={formData.tipo}
               />
               
               <div className="bg-gray-50 p-4 rounded-lg">

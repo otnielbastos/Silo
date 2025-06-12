@@ -29,6 +29,7 @@ import { Badge } from '@/components/ui/badge';
 import { useAuth } from '@/contexts/AuthContext';
 import DashboardHome from '@/pages/DashboardHome';
 import ProtectedRoute from '@/components/auth/ProtectedRoute';
+import Reports from '@/components/Reports';
 
 interface MenuItem {
   id: string;
@@ -327,10 +328,7 @@ const DashboardLayout: React.FC = () => {
               path="reports/*" 
               element={
                 <ProtectedRoute requiredPermission={{ recurso: 'relatorios', acao: 'read' }}>
-                  <div className="text-center py-8">
-                    <h2 className="text-2xl font-bold">Relatórios</h2>
-                    <p className="text-muted-foreground">Em desenvolvimento...</p>
-                  </div>
+                  <Reports />
                 </ProtectedRoute>
               } 
             />
