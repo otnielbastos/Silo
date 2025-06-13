@@ -654,6 +654,203 @@ export const usuariosService = {
       console.error('💥 Erro ao buscar permissões do perfil:', error);
       throw new Error(error.message || 'Erro interno do servidor');
     }
+  },
+
+  // Criar novo perfil
+  async criarPerfil(data: { nome: string; descricao: string; permissoes: any }) {
+    try {
+      console.log('🆕 Criando novo perfil:', data);
+
+      const usuarioLogado = authService.getCurrentUserId();
+      if (!usuarioLogado) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Verificar se o perfil já existe
+      const { data: perfilExistente } = await supabase
+        .from('perfis')
+        .select('id')
+        .eq('nome', data.nome)
+        .single();
+
+      if (perfilExistente) {
+        throw new Error('Já existe um perfil com este nome');
+      }
+
+      const { data: novoPerfil, error } = await supabase
+        .from('perfis')
+        .insert({
+          nome: data.nome,
+          descricao: data.descricao,
+          permissoes: data.permissoes,
+          ativo: true
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao criar perfil:', error);
+        throw new Error('Erro ao criar perfil');
+      }
+
+      await registrarAuditoria(
+        usuarioLogado,
+        'CREATE',
+        'perfis',
+        novoPerfil.id,
+        null,
+        novoPerfil
+      );
+
+      return {
+        success: true,
+        data: novoPerfil,
+        message: 'Perfil criado com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('💥 Erro ao criar perfil:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Atualizar perfil existente
+  async atualizarPerfil(id: number, data: { nome: string; descricao: string; permissoes: any }) {
+    try {
+      console.log('✏️ Atualizando perfil ID:', id, 'com dados:', data);
+
+      const usuarioLogado = authService.getCurrentUserId();
+      if (!usuarioLogado) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Buscar perfil atual
+      const { data: perfilAtual, error: buscarError } = await supabase
+        .from('perfis')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (buscarError || !perfilAtual) {
+        throw new Error('Perfil não encontrado');
+      }
+
+      // Verificar se o nome não está sendo usado por outro perfil
+      if (data.nome !== perfilAtual.nome) {
+        const { data: perfilExistente } = await supabase
+          .from('perfis')
+          .select('id')
+          .eq('nome', data.nome)
+          .neq('id', id)
+          .single();
+
+        if (perfilExistente) {
+          throw new Error('Já existe um perfil com este nome');
+        }
+      }
+
+      const { data: perfilAtualizado, error } = await supabase
+        .from('perfis')
+        .update({
+          nome: data.nome,
+          descricao: data.descricao,
+          permissoes: data.permissoes,
+          data_atualizacao: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('❌ Erro ao atualizar perfil:', error);
+        throw new Error('Erro ao atualizar perfil');
+      }
+
+      await registrarAuditoria(
+        usuarioLogado,
+        'UPDATE',
+        'perfis',
+        id,
+        perfilAtual,
+        perfilAtualizado
+      );
+
+      return {
+        success: true,
+        data: perfilAtualizado,
+        message: 'Perfil atualizado com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('💥 Erro ao atualizar perfil:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
+  },
+
+  // Excluir perfil
+  async excluirPerfil(id: number) {
+    try {
+      console.log('🗑️ Excluindo perfil ID:', id);
+
+      const usuarioLogado = authService.getCurrentUserId();
+      if (!usuarioLogado) {
+        throw new Error('Usuário não autenticado');
+      }
+
+      // Verificar se o perfil existe
+      const { data: perfil, error: buscarError } = await supabase
+        .from('perfis')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (buscarError || !perfil) {
+        throw new Error('Perfil não encontrado');
+      }
+
+      // Verificar se há usuários usando este perfil
+      const { count: usuariosComPerfil } = await supabase
+        .from('usuarios')
+        .select('*', { count: 'exact', head: true })
+        .eq('perfil_id', id)
+        .eq('ativo', true);
+
+      if (usuariosComPerfil && usuariosComPerfil > 0) {
+        throw new Error('Não é possível excluir um perfil que possui usuários ativos');
+      }
+
+      // Em vez de excluir, vamos desativar o perfil
+      const { error } = await supabase
+        .from('perfis')
+        .update({
+          ativo: false,
+          data_atualizacao: new Date().toISOString()
+        })
+        .eq('id', id);
+
+      if (error) {
+        console.error('❌ Erro ao desativar perfil:', error);
+        throw new Error('Erro ao excluir perfil');
+      }
+
+      await registrarAuditoria(
+        usuarioLogado,
+        'DELETE',
+        'perfis',
+        id,
+        perfil,
+        { ativo: false }
+      );
+
+      return {
+        success: true,
+        message: 'Perfil excluído com sucesso'
+      };
+
+    } catch (error: any) {
+      console.error('💥 Erro ao excluir perfil:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
   }
 };
 

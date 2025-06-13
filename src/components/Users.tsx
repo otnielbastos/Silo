@@ -46,7 +46,7 @@ export function Users() {
   const { toast } = useToast();
 
   // Verificar se o usuário tem permissão para acessar usuários
-  if (!checkPermission('usuarios', 'listar')) {
+  if (!checkPermission('usuarios', 'visualizar')) {
     return (
       <div className="text-center py-12">
         <UserX className="w-16 h-16 text-gray-300 mx-auto mb-4" />

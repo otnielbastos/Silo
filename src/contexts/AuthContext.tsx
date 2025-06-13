@@ -121,8 +121,17 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   };
 
   const checkPermission = (recurso: string, acao: string): boolean => {
-    if (!user || !user.permissoes) return false;
+    if (!user || !user.permissoes) {
+      return false;
+    }
     
+    // Verificar se está no novo formato (com pages e actions)
+    if (user.permissoes.pages && user.permissoes.actions) {
+      const permissoesRecurso = user.permissoes.actions[recurso];
+      return permissoesRecurso ? permissoesRecurso.includes(acao) : false;
+    }
+    
+    // Fallback para formato antigo (compatibilidade)
     const permissoesRecurso = user.permissoes[recurso];
     return permissoesRecurso ? permissoesRecurso.includes(acao) : false;
   };

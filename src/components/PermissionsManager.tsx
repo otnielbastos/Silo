@@ -149,22 +149,49 @@ export const PermissionsManager: React.FC<PermissionsManagerProps> = ({ onClose 
         return;
       }
 
-      // Aqui você implementaria a chamada para salvar no Supabase
-      // Por enquanto, vou simular o salvamento
-      
-      toast({
-        title: "Sucesso",
-        description: editingPerfil ? "Perfil atualizado com sucesso" : "Perfil criado com sucesso"
+      console.log('🔄 Salvando perfil:', {
+        editingPerfil: editingPerfil?.id,
+        formData
       });
+
+      if (editingPerfil) {
+        // Atualizar perfil existente
+        const response = await supabaseUsuarios.atualizarPerfil(editingPerfil.id, {
+          nome: formData.nome.trim(),
+          descricao: formData.descricao.trim(),
+          permissoes: formData.permissoes
+        });
+
+        if (response.success) {
+          toast({
+            title: "Sucesso",
+            description: "Perfil atualizado com sucesso"
+          });
+        }
+      } else {
+        // Criar novo perfil
+        const response = await supabaseUsuarios.criarPerfil({
+          nome: formData.nome.trim(),
+          descricao: formData.descricao.trim(),
+          permissoes: formData.permissoes
+        });
+
+        if (response.success) {
+          toast({
+            title: "Sucesso",
+            description: "Perfil criado com sucesso"
+          });
+        }
+      }
 
       setIsDialogOpen(false);
       resetForm();
       loadPerfis();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar perfil:', error);
       toast({
         title: "Erro",
-        description: "Erro ao salvar perfil",
+        description: error.message || "Erro ao salvar perfil",
         variant: "destructive"
       });
     }
@@ -186,17 +213,22 @@ export const PermissionsManager: React.FC<PermissionsManagerProps> = ({ onClose 
   const handleDelete = async (perfilId: number) => {
     if (confirm('Tem certeza que deseja excluir este perfil?')) {
       try {
-        // Implementar exclusão no Supabase
-        toast({
-          title: "Sucesso",
-          description: "Perfil excluído com sucesso"
-        });
-        loadPerfis();
-      } catch (error) {
+        console.log('🗑️ Excluindo perfil ID:', perfilId);
+        
+        const response = await supabaseUsuarios.excluirPerfil(perfilId);
+        
+        if (response.success) {
+          toast({
+            title: "Sucesso",
+            description: "Perfil excluído com sucesso"
+          });
+          loadPerfis();
+        }
+      } catch (error: any) {
         console.error('Erro ao excluir perfil:', error);
         toast({
           title: "Erro",
-          description: "Erro ao excluir perfil",
+          description: error.message || "Erro ao excluir perfil",
           variant: "destructive"
         });
       }
@@ -217,27 +249,37 @@ export const PermissionsManager: React.FC<PermissionsManagerProps> = ({ onClose 
 
   const createDefaultProfiles = async () => {
     try {
+      console.log('🏗️ Criando perfis padrão...');
+      
+      let perfisCriados = 0;
+      
       // Criar cada perfil padrão
       for (const perfilPadrao of PERFIS_PADRAO) {
         // Verificar se o perfil já existe
         const perfilExistente = perfis.find(p => p.nome === perfilPadrao.nome);
         if (!perfilExistente) {
-          // Aqui você implementaria a chamada para criar o perfil no Supabase
           console.log('Criando perfil:', perfilPadrao.nome);
-          // await supabaseUsuarios.criarPerfil(perfilPadrao);
+          await supabaseUsuarios.criarPerfil({
+            nome: perfilPadrao.nome,
+            descricao: perfilPadrao.descricao,
+            permissoes: perfilPadrao.permissoes
+          });
+          perfisCriados++;
         }
       }
       
       toast({
         title: "Sucesso",
-        description: "Perfis padrão criados com sucesso"
+        description: perfisCriados > 0 
+          ? `${perfisCriados} perfis padrão criados com sucesso`
+          : "Todos os perfis padrão já existem"
       });
       loadPerfis();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao criar perfis padrão:', error);
       toast({
         title: "Erro",
-        description: "Erro ao criar perfis padrão",
+        description: error.message || "Erro ao criar perfis padrão",
         variant: "destructive"
       });
     }
