@@ -148,16 +148,6 @@ const Login: React.FC = () => {
                 {isSubmitting ? 'Entrando...' : 'Entrar'}
               </Button>
             </form>
-
-            <div className="text-center space-y-4">
-              <div className="text-sm text-muted-foreground">
-                <div className="border-t my-4"></div>
-                <p className="font-medium">Credenciais padrão:</p>
-                <div className="mt-2 text-xs space-y-1">
-                  <p><strong>Admin:</strong> admin@silosystem.com / admin123</p>
-                </div>
-              </div>
-            </div>
           </CardContent>
         </Card>
 

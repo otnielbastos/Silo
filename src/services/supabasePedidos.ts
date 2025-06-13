@@ -30,6 +30,7 @@ interface ItemPedidoInput {
 
 interface AtualizarPedidoData {
   status?: string;
+  data_pedido?: string;
   data_entrega_prevista?: string;
   horario_entrega?: string;
   observacoes?: string;

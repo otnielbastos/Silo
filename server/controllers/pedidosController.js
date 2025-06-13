@@ -432,6 +432,7 @@ const pedidosController = {
             const { 
                 status, 
                 tipo,
+                data_pedido,
                 data_entrega_prevista,
                 horario_entrega,
                 forma_pagamento, 
@@ -556,6 +557,10 @@ const pedidosController = {
             if (tipo) {
                 updateFields.push('tipo = ?');
                 updateValues.push(tipo);
+            }
+            if (data_pedido !== undefined) {
+                updateFields.push('data_pedido = ?');
+                updateValues.push(data_pedido);
             }
             if (data_entrega_prevista !== undefined) {
                 updateFields.push('data_entrega_prevista = ?');

@@ -239,10 +239,14 @@ export function useOrders() {
         throw new Error('Pedido não encontrado');
       }
 
+      // Combinar data e hora em um timestamp para data_pedido
+      const dataPedido = `${orderData.date}T${orderData.time}:00`;
+
       // Mapear dados para formato do backend
       const backendData: any = {
         status: mapStatusToBackend(orderData.status),
         tipo: orderData.tipo,
+        data_pedido: dataPedido, // Adicionar data_pedido combinada
         data_entrega_prevista: orderData.data_entrega_prevista,
         horario_entrega: orderData.horario_entrega,
         observacoes_producao: orderData.observacoes_producao,
