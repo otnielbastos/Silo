@@ -79,7 +79,7 @@ export const ACTION_LABELS: Record<ActionPermission, string> = {
   imprimir: 'Imprimir'
 };
 
-// Perfis pré-definidos
+// Perfis padrão do sistema
 export const PERFIS_PADRAO: Omit<PerfilPermissoes, 'id' | 'data_criacao' | 'data_atualizacao'>[] = [
   {
     nome: 'Administrador',
@@ -102,14 +102,14 @@ export const PERFIS_PADRAO: Omit<PerfilPermissoes, 'id' | 'data_criacao' | 'data
   },
   {
     nome: 'Gerente',
-    descricao: 'Acesso de gerenciamento operacional',
+    descricao: 'Acesso a operações e relatórios',
     ativo: true,
     permissoes: {
       pages: ['dashboard', 'produtos', 'pedidos', 'clientes', 'estoque', 'entregas', 'relatorios'],
       actions: {
         dashboard: ['visualizar'],
         produtos: ['visualizar', 'criar', 'editar', 'exportar'],
-        pedidos: ['visualizar', 'criar', 'editar', 'aprovar', 'exportar', 'imprimir'],
+        pedidos: ['visualizar', 'criar', 'editar', 'aprovar', 'cancelar', 'exportar', 'imprimir'],
         clientes: ['visualizar', 'criar', 'editar', 'exportar'],
         estoque: ['visualizar', 'editar', 'exportar'],
         entregas: ['visualizar', 'editar', 'exportar'],
@@ -119,28 +119,26 @@ export const PERFIS_PADRAO: Omit<PerfilPermissoes, 'id' | 'data_criacao' | 'data
   },
   {
     nome: 'Vendedor',
-    descricao: 'Acesso para vendas e atendimento',
+    descricao: 'Acesso a vendas e clientes',
     ativo: true,
     permissoes: {
-      pages: ['dashboard', 'produtos', 'pedidos', 'clientes'],
+      pages: ['dashboard', 'pedidos', 'clientes'],
       actions: {
         dashboard: ['visualizar'],
-        produtos: ['visualizar'],
-        pedidos: ['visualizar', 'criar', 'editar'],
-        clientes: ['visualizar', 'criar', 'editar']
+        pedidos: ['visualizar', 'criar', 'editar', 'exportar'],
+        clientes: ['visualizar', 'criar', 'editar', 'exportar']
       }
     }
   },
   {
     nome: 'Operacional',
-    descricao: 'Acesso para produção e estoque',
+    descricao: 'Acesso a estoque e entregas',
     ativo: true,
     permissoes: {
-      pages: ['dashboard', 'produtos', 'pedidos', 'estoque', 'entregas'],
+      pages: ['dashboard', 'produtos', 'estoque', 'entregas'],
       actions: {
         dashboard: ['visualizar'],
         produtos: ['visualizar'],
-        pedidos: ['visualizar', 'editar'],
         estoque: ['visualizar', 'editar'],
         entregas: ['visualizar', 'editar']
       }

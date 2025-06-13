@@ -217,7 +217,17 @@ export const PermissionsManager: React.FC<PermissionsManagerProps> = ({ onClose 
 
   const createDefaultProfiles = async () => {
     try {
-      // Implementar criação de perfis padrão
+      // Criar cada perfil padrão
+      for (const perfilPadrao of PERFIS_PADRAO) {
+        // Verificar se o perfil já existe
+        const perfilExistente = perfis.find(p => p.nome === perfilPadrao.nome);
+        if (!perfilExistente) {
+          // Aqui você implementaria a chamada para criar o perfil no Supabase
+          console.log('Criando perfil:', perfilPadrao.nome);
+          // await supabaseUsuarios.criarPerfil(perfilPadrao);
+        }
+      }
+      
       toast({
         title: "Sucesso",
         description: "Perfis padrão criados com sucesso"

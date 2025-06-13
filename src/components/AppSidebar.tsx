@@ -13,6 +13,8 @@ import {
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { usePermissions } from "@/hooks/usePermissions";
+import { PagePermission } from "@/types/permissions";
 import { ActivePage } from "@/pages/Index";
 
 interface AppSidebarProps {
@@ -25,54 +27,56 @@ const menuItems = [
     title: "Dashboard",
     url: "dashboard",
     icon: Home,
-    permission: null, // Sempre visível
+    page: "dashboard" as PagePermission,
+    alwaysVisible: true, // Dashboard sempre visível
   },
   {
     title: "Produtos",
     url: "products",
     icon: Package,
-    permission: { recurso: 'produtos', acao: 'listar' },
+    page: "produtos" as PagePermission,
   },
   {
     title: "Pedidos",
     url: "orders",
     icon: ShoppingCart,
-    permission: { recurso: 'pedidos', acao: 'listar' },
+    page: "pedidos" as PagePermission,
   },
   {
     title: "Clientes",
     url: "customers",
     icon: Users,
-    permission: { recurso: 'clientes', acao: 'listar' },
+    page: "clientes" as PagePermission,
   },
   {
     title: "Estoque",
     url: "stock",
     icon: Warehouse,
-    permission: { recurso: 'estoque', acao: 'listar' },
+    page: "estoque" as PagePermission,
   },
   {
     title: "Entregas",
     url: "deliveries",
     icon: Truck,
-    permission: { recurso: 'entregas', acao: 'listar' },
+    page: "entregas" as PagePermission,
   },
   {
     title: "Relatórios",
     url: "reports",
     icon: BarChart3,
-    permission: { recurso: 'relatorios', acao: 'listar' },
+    page: "relatorios" as PagePermission,
   },
   {
     title: "Usuários",
     url: "users",
     icon: UserCog,
-    permission: { recurso: 'usuarios', acao: 'listar' },
+    page: "usuarios" as PagePermission,
   },
 ];
 
 export function AppSidebar({ activePage, setActivePage }: AppSidebarProps) {
-  const { user, logout, checkPermission } = useAuth();
+  const { user, logout } = useAuth();
+  const { hasPageAccess, loading } = usePermissions();
 
   const handleLogout = () => {
     logout();
@@ -80,8 +84,9 @@ export function AppSidebar({ activePage, setActivePage }: AppSidebarProps) {
 
   // Filtrar itens do menu baseado nas permissões do usuário
   const visibleMenuItems = menuItems.filter(item => {
-    if (!item.permission) return true; // Sempre visível (como Dashboard)
-    return checkPermission(item.permission.recurso, item.permission.acao);
+    if (item.alwaysVisible) return true; // Dashboard sempre visível
+    if (loading) return false; // Não mostrar enquanto carrega
+    return hasPageAccess(item.page);
   });
 
   return (
@@ -104,27 +109,49 @@ export function AppSidebar({ activePage, setActivePage }: AppSidebarProps) {
           </SidebarGroupLabel>
           <SidebarGroupContent>
             <SidebarMenu>
-              {visibleMenuItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={activePage === item.url}
-                    className={`w-full transition-all duration-200 ${
-                      activePage === item.url
-                        ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
-                        : 'hover:bg-gray-100 text-gray-700'
-                    }`}
-                  >
-                    <button
-                      onClick={() => setActivePage(item.url as ActivePage)}
-                      className="flex items-center gap-3 w-full"
-                    >
-                      <item.icon className="w-5 h-5" />
-                      <span className="font-medium">{item.title}</span>
-                    </button>
-                  </SidebarMenuButton>
+              {loading ? (
+                // Skeleton loading para o menu
+                Array.from({ length: 3 }).map((_, index) => (
+                  <SidebarMenuItem key={`skeleton-${index}`}>
+                    <div className="flex items-center gap-3 p-2 rounded-md animate-pulse">
+                      <div className="w-5 h-5 bg-gray-300 rounded"></div>
+                      <div className="h-4 bg-gray-300 rounded flex-1"></div>
+                    </div>
+                  </SidebarMenuItem>
+                ))
+              ) : visibleMenuItems.length === 0 ? (
+                // Mensagem quando não há itens visíveis
+                <SidebarMenuItem>
+                  <div className="p-4 text-center text-gray-500 text-sm">
+                    <Settings className="w-8 h-8 mx-auto mb-2 opacity-50" />
+                    <p>Nenhum menu disponível</p>
+                    <p className="text-xs">Contate o administrador</p>
+                  </div>
                 </SidebarMenuItem>
-              ))}
+              ) : (
+                // Menu normal
+                visibleMenuItems.map((item) => (
+                  <SidebarMenuItem key={item.title}>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={activePage === item.url}
+                      className={`w-full transition-all duration-200 ${
+                        activePage === item.url
+                          ? 'bg-gradient-to-r from-blue-500 to-purple-600 text-white hover:from-blue-600 hover:to-purple-700'
+                          : 'hover:bg-gray-100 text-gray-700'
+                      }`}
+                    >
+                      <button
+                        onClick={() => setActivePage(item.url as ActivePage)}
+                        className="flex items-center gap-3 w-full"
+                      >
+                        <item.icon className="w-5 h-5" />
+                        <span className="font-medium">{item.title}</span>
+                      </button>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                ))
+              )}
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

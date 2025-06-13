@@ -1,4 +1,4 @@
-import { useState } from "react";
+import React, { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { SidebarProvider } from "@/components/ui/sidebar";
@@ -13,33 +13,64 @@ import { Deliveries } from "@/components/Deliveries";
 import Reports from "@/components/Reports";
 import { Users } from "@/components/Users";
 import { NavigationProvider } from "@/contexts/NavigationContext";
+import { ProtectedComponent } from "@/components/ProtectedComponent";
+import { PagePermission } from "@/types/permissions";
 
 export type ActivePage = 'dashboard' | 'products' | 'orders' | 'customers' | 'stock' | 'deliveries' | 'reports' | 'users';
 
 const Index = () => {
   const [activePage, setActivePage] = useState<ActivePage>('dashboard');
 
+  const getPagePermission = (page: ActivePage): PagePermission => {
+    const pageMap: Record<ActivePage, PagePermission> = {
+      'dashboard': 'dashboard',
+      'products': 'produtos',
+      'orders': 'pedidos',
+      'customers': 'clientes',
+      'stock': 'estoque',
+      'deliveries': 'entregas',
+      'reports': 'relatorios',
+      'users': 'usuarios'
+    };
+    return pageMap[page];
+  };
+
   const renderContent = () => {
-    switch (activePage) {
-      case 'dashboard':
-        return <Dashboard />;
-      case 'products':
-        return <Products />;
-      case 'orders':
-        return <Orders />;
-      case 'customers':
-        return <Customers />;
-      case 'stock':
-        return <Stock />;
-      case 'deliveries':
-        return <Deliveries />;
-      case 'reports':
-        return <Reports />;
-      case 'users':
-        return <Users />;
-      default:
-        return <Dashboard />;
+    const pagePermission = getPagePermission(activePage);
+    
+    const getComponent = () => {
+      switch (activePage) {
+        case 'dashboard':
+          return <Dashboard />;
+        case 'products':
+          return <Products />;
+        case 'orders':
+          return <Orders />;
+        case 'customers':
+          return <Customers />;
+        case 'stock':
+          return <Stock />;
+        case 'deliveries':
+          return <Deliveries />;
+        case 'reports':
+          return <Reports />;
+        case 'users':
+          return <Users />;
+        default:
+          return <Dashboard />;
+      }
+    };
+
+    // Dashboard sempre visível, outras páginas protegidas
+    if (activePage === 'dashboard') {
+      return getComponent();
     }
+
+    return (
+      <ProtectedComponent page={pagePermission}>
+        {getComponent()}
+      </ProtectedComponent>
+    );
   };
 
   return (
@@ -61,10 +92,10 @@ const Index = () => {
               {renderContent()}
             </div>
           </main>
-        </div>
-      </SidebarProvider>
-    </NavigationProvider>
-  );
+                  </div>
+        </SidebarProvider>
+      </NavigationProvider>
+    );
 };
 
 export default Index;

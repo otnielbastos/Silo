@@ -226,6 +226,7 @@ export const authService = {
         nome: usuarios.nome,
         email: usuarios.email,
         perfil: usuarios.perfil.nome,
+        perfil_id: usuarios.perfil_id,
         permissoes: usuarios.perfil.permissoes
       }));
 
@@ -241,6 +242,7 @@ export const authService = {
             nome: usuarios.nome,
             email: usuarios.email,
             perfil: usuarios.perfil.nome,
+            perfil_id: usuarios.perfil_id,
             permissoes: usuarios.perfil.permissoes
           }
         }

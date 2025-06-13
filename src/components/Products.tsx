@@ -8,9 +8,11 @@ import { useProducts, Product } from "@/hooks/useProducts";
 import { ProductFormModal } from "@/components/ProductFormModal";
 import { DeleteConfirmModal } from "@/components/DeleteConfirmModal";
 import { getImageUrl } from "@/services/api";
+import { usePageAccess } from "@/components/ProtectedComponent";
 
 export function Products() {
   const { products, loading, error, addProduct, updateProduct, deleteProduct } = useProducts();
+  const { hasActionAccess } = usePageAccess('produtos');
   const [searchTerm, setSearchTerm] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("");
   const [typeFilter, setTypeFilter] = useState("");
@@ -131,13 +133,15 @@ export function Products() {
           </h2>
           <p className="text-gray-600">Gerencie seus produtos e estoque</p>
         </div>
-        <Button 
-          onClick={handleCreateProduct}
-          className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
-        >
-          <Plus className="w-4 h-4 mr-2" />
-          Novo Produto
-        </Button>
+        {hasActionAccess('criar') && (
+          <Button 
+            onClick={handleCreateProduct}
+            className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white"
+          >
+            <Plus className="w-4 h-4 mr-2" />
+            Novo Produto
+          </Button>
+        )}
       </div>
 
       {/* Search and Filters */}
@@ -261,23 +265,27 @@ export function Products() {
                   </div>
                   
                   <div className="flex gap-2 pt-2">
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="flex-1"
-                      onClick={() => handleEditProduct(product)}
-                    >
-                      <Edit className="w-3 h-3 mr-1" />
-                      Editar
-                    </Button>
-                    <Button 
-                      size="sm" 
-                      variant="outline" 
-                      className="text-red-600 hover:text-red-700 hover:bg-red-50"
-                      onClick={() => handleDeleteProduct(product)}
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </Button>
+                    {hasActionAccess('editar') && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="flex-1"
+                        onClick={() => handleEditProduct(product)}
+                      >
+                        <Edit className="w-3 h-3 mr-1" />
+                        Editar
+                      </Button>
+                    )}
+                    {hasActionAccess('excluir') && (
+                      <Button 
+                        size="sm" 
+                        variant="outline" 
+                        className="text-red-600 hover:text-red-700 hover:bg-red-50"
+                        onClick={() => handleDeleteProduct(product)}
+                      >
+                        <Trash2 className="w-3 h-3" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardContent>
@@ -296,7 +304,7 @@ export function Products() {
               : 'Comece adicionando alguns produtos ao seu estoque.'
             }
           </p>
-          {!searchTerm && !categoryFilter && !typeFilter && !showLowStock && (
+          {!searchTerm && !categoryFilter && !typeFilter && !showLowStock && hasActionAccess('criar') && (
             <Button onClick={handleCreateProduct}>
               <Plus className="w-4 h-4 mr-2" />
               Adicionar Primeiro Produto

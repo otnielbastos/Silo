@@ -9,6 +9,7 @@ export interface User {
   nome: string;
   email: string;
   perfil: string;
+  perfil_id?: number;
   permissoes: {
     [key: string]: string[];
   };

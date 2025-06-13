@@ -614,6 +614,8 @@ export const usuariosService = {
   // Buscar permissões de um perfil
   async buscarPermissoesPerfil(perfilId: number) {
     try {
+      console.log('🔍 Buscando permissões para perfil ID:', perfilId);
+      
       const { data: perfil, error } = await supabase
         .from('perfis')
         .select('id, nome, permissoes')
@@ -621,7 +623,23 @@ export const usuariosService = {
         .eq('ativo', true)
         .single();
 
-      if (error) throw new Error('Perfil não encontrado');
+      console.log('📋 Resultado da consulta perfil:', { perfil, error });
+
+      if (error) {
+        console.error('❌ Erro na consulta do perfil:', error);
+        throw new Error('Perfil não encontrado');
+      }
+
+      if (!perfil) {
+        console.error('❌ Perfil não encontrado para ID:', perfilId);
+        throw new Error('Perfil não encontrado');
+      }
+
+      console.log('✅ Perfil encontrado:', {
+        id: perfil.id,
+        nome: perfil.nome,
+        permissoes: perfil.permissoes
+      });
 
       return {
         success: true,
@@ -633,7 +651,7 @@ export const usuariosService = {
       };
 
     } catch (error: any) {
-      console.error('Erro ao buscar permissões do perfil:', error);
+      console.error('💥 Erro ao buscar permissões do perfil:', error);
       throw new Error(error.message || 'Erro interno do servidor');
     }
   }
