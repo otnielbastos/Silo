@@ -74,8 +74,7 @@ export const usuariosService = {
           ativo,
           ultimo_acesso,
           data_criacao,
-          perfil:perfis(id, nome),
-          criado_por_usuario:usuarios!usuarios_criado_por_fkey(nome)
+          perfil:perfis(id, nome)
         `);
 
       // REGRA DE NEGÓCIO: Aplicar filtros
@@ -137,9 +136,7 @@ export const usuariosService = {
           ultimo_acesso,
           data_criacao,
           data_atualizacao,
-          perfil:perfis(id, nome),
-          criado_por_usuario:usuarios!usuarios_criado_por_fkey(id, nome),
-          atualizado_por_usuario:usuarios!usuarios_atualizado_por_fkey(id, nome)
+          perfil:perfis(id, nome)
         `)
         .eq('id', id)
         .single();

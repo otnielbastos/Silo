@@ -61,8 +61,21 @@ export function Users() {
   const fetchUsers = async () => {
     try {
       setLoading(true);
-      const response = await api.get('/users');
-      setUsers(response.data);
+      const response = await api.usuarios.listar();
+      if (response.success) {
+        // Mapear os dados para o formato esperado pelo componente
+        const mappedUsers = response.data.usuarios.map((user: any) => ({
+          id: user.id,
+          nome: user.nome,
+          email: user.email,
+          perfil: user.perfil?.nome || 'Sem perfil',
+          perfil_id: user.perfil?.id || 0,
+          ativo: user.ativo,
+          ultimo_acesso: user.ultimo_acesso,
+          data_criacao: user.data_criacao
+        }));
+        setUsers(mappedUsers);
+      }
     } catch (error: any) {
       toast({
         title: "Erro",
@@ -76,8 +89,10 @@ export function Users() {
 
   const fetchProfiles = async () => {
     try {
-      const response = await api.get('/users/profiles');
-      setProfiles(response.data);
+      const response = await api.usuarios.buscarPerfis();
+      if (response.success) {
+        setProfiles(response.data);
+      }
     } catch (error: any) {
       console.error('Erro ao carregar perfis:', error);
     }
@@ -127,13 +142,19 @@ export function Users() {
         if (!updateData.password) {
           delete updateData.password; // Não enviar senha vazia
         }
-        await api.put(`/users/${editingUser.id}`, updateData);
+        await api.usuarios.atualizar(editingUser.id, {
+          ...updateData,
+          perfil_id: parseInt(updateData.perfil_id)
+        });
         toast({
           title: "Sucesso",
           description: "Usuário atualizado com sucesso.",
         });
       } else {
-        await api.post('/users', formData);
+        await api.usuarios.criar({
+          ...formData,
+          perfil_id: parseInt(formData.perfil_id)
+        });
         toast({
           title: "Sucesso",
           description: "Usuário criado com sucesso.",
@@ -145,7 +166,7 @@ export function Users() {
     } catch (error: any) {
       toast({
         title: "Erro",
-        description: error.response?.data?.message || "Erro ao salvar usuário.",
+        description: error.message || "Erro ao salvar usuário.",
         variant: "destructive",
       });
     }
@@ -153,7 +174,11 @@ export function Users() {
 
   const toggleUserStatus = async (userId: number, currentStatus: boolean) => {
     try {
-      await api.patch(`/users/${userId}/toggle-status`);
+      if (currentStatus) {
+        await api.usuarios.desativar(userId);
+      } else {
+        await api.usuarios.reativar(userId);
+      }
       toast({
         title: "Sucesso",
         description: `Usuário ${currentStatus ? 'desativado' : 'ativado'} com sucesso.`,
@@ -162,7 +187,7 @@ export function Users() {
     } catch (error: any) {
       toast({
         title: "Erro",
-        description: "Erro ao alterar status do usuário.",
+        description: error.message || "Erro ao alterar status do usuário.",
         variant: "destructive",
       });
     }

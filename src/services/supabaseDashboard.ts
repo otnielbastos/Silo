@@ -390,15 +390,20 @@ export async function getAlertas(): Promise<Alerta[]> {
     }
 
     // 8. CLIENTES INATIVOS (Prioridade Baixa)
+    // Primeiro buscar clientes que fizeram pedidos recentemente
+    const { data: clientesComPedidos } = await supabase
+      .from('pedidos')
+      .select('cliente_id')
+      .gte('data_pedido', mesAtras);
+
+    const clientesComPedidosIds = clientesComPedidos?.map(p => p.cliente_id) || [];
+
+    // Depois buscar clientes ativos que NÃO estão na lista
     const { count: clientesInativos } = await supabase
       .from('clientes')
       .select('*', { count: 'exact', head: true })
       .eq('status', 'ativo')
-      .not('id', 'in', `(
-        SELECT DISTINCT cliente_id 
-        FROM pedidos 
-        WHERE data_pedido >= '${mesAtras}'
-      )`);
+      .not('id', 'in', `(${clientesComPedidosIds.join(',') || '0'})`);
 
     if (clientesInativos && clientesInativos > 10) {
       alertas.push({
