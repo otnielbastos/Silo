@@ -609,5 +609,35 @@ export const usuariosService = {
       console.error('Erro ao buscar estatísticas:', error);
       throw new Error(error.message || 'Erro interno do servidor');
     }
+  },
+
+  // Buscar permissões de um perfil
+  async buscarPermissoesPerfil(perfilId: number) {
+    try {
+      const { data: perfil, error } = await supabase
+        .from('perfis')
+        .select('id, nome, permissoes')
+        .eq('id', perfilId)
+        .eq('ativo', true)
+        .single();
+
+      if (error) throw new Error('Perfil não encontrado');
+
+      return {
+        success: true,
+        data: {
+          id: perfil.id,
+          nome: perfil.nome,
+          permissoes: perfil.permissoes || { pages: [], actions: {} }
+        }
+      };
+
+    } catch (error: any) {
+      console.error('Erro ao buscar permissões do perfil:', error);
+      throw new Error(error.message || 'Erro interno do servidor');
+    }
   }
-}; 
+};
+
+export const supabaseUsuarios = usuariosService;
+export default usuariosService; 

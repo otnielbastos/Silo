@@ -3,10 +3,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { Users as UsersIcon, Plus, Search, Edit, Trash2, UserCheck, UserX } from "lucide-react";
+import { Users as UsersIcon, Plus, Search, Edit, Trash2, UserCheck, UserX, Shield } from "lucide-react";
 import { useAuth } from "@/contexts/AuthContext";
 import api from "@/services/api";
 import { useToast } from "@/hooks/use-toast";
+import { PermissionsManager } from "@/components/PermissionsManager";
 
 interface User {
   id: number;
@@ -28,15 +29,17 @@ interface Profile {
 export function Users() {
   const [users, setUsers] = useState<User[]>([]);
   const [profiles, setProfiles] = useState<Profile[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState("");
-  const [isFormOpen, setIsFormOpen] = useState(false);
+  const [showModal, setShowModal] = useState(false);
+  const [showPermissionsManager, setShowPermissionsManager] = useState(false);
   const [editingUser, setEditingUser] = useState<User | null>(null);
   const [formData, setFormData] = useState({
     nome: "",
     email: "",
     password: "",
-    perfil_id: ""
+    perfil_id: 0,
+    ativo: true
   });
   
   const { user: currentUser, checkPermission } = useAuth();
@@ -57,6 +60,22 @@ export function Users() {
     fetchUsers();
     fetchProfiles();
   }, []);
+
+  // Fechar modal com ESC
+  useEffect(() => {
+    const handleKeyDown = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') {
+        if (showPermissionsManager) {
+          setShowPermissionsManager(false);
+        } else if (showModal) {
+          setShowModal(false);
+        }
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [showPermissionsManager, showModal]);
 
   const fetchUsers = async () => {
     try {
@@ -100,8 +119,8 @@ export function Users() {
 
   const handleCreate = () => {
     setEditingUser(null);
-    setFormData({ nome: "", email: "", password: "", perfil_id: "" });
-    setIsFormOpen(true);
+    setFormData({ nome: "", email: "", password: "", perfil_id: 0, ativo: true });
+    setShowModal(true);
   };
 
   const handleEdit = (user: User) => {
@@ -110,9 +129,10 @@ export function Users() {
       nome: user.nome,
       email: user.email,
       password: "",
-      perfil_id: user.perfil_id.toString()
+      perfil_id: user.perfil_id,
+      ativo: user.ativo
     });
-    setIsFormOpen(true);
+    setShowModal(true);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -138,13 +158,13 @@ export function Users() {
 
     try {
       if (editingUser) {
-        const updateData = { ...formData };
+        const updateData: any = { ...formData };
         if (!updateData.password) {
           delete updateData.password; // Não enviar senha vazia
         }
         await api.usuarios.atualizar(editingUser.id, {
           ...updateData,
-          perfil_id: parseInt(updateData.perfil_id)
+          perfil_id: parseInt(updateData.perfil_id.toString())
         });
         toast({
           title: "Sucesso",
@@ -153,7 +173,7 @@ export function Users() {
       } else {
         await api.usuarios.criar({
           ...formData,
-          perfil_id: parseInt(formData.perfil_id)
+          perfil_id: parseInt(formData.perfil_id.toString())
         });
         toast({
           title: "Sucesso",
@@ -161,7 +181,7 @@ export function Users() {
         });
       }
       
-      setIsFormOpen(false);
+      setShowModal(false);
       fetchUsers();
     } catch (error: any) {
       toast({
@@ -214,12 +234,20 @@ export function Users() {
           </h2>
           <p className="text-gray-600">Gerencie usuários e permissões do sistema</p>
         </div>
-        {checkPermission('usuarios', 'criar') && (
-          <Button onClick={handleCreate} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
-            <Plus className="w-4 h-4 mr-2" />
-            Novo Usuário
-          </Button>
-        )}
+        <div className="flex gap-2">
+          {checkPermission('usuarios', 'editar') && (
+            <Button variant="outline" onClick={() => setShowPermissionsManager(true)}>
+              <Shield className="h-4 w-4 mr-2" />
+              Gerenciar Permissões
+            </Button>
+          )}
+          {checkPermission('usuarios', 'criar') && (
+            <Button onClick={handleCreate} className="bg-gradient-to-r from-blue-500 to-purple-600 hover:from-blue-600 hover:to-purple-700 text-white">
+              <Plus className="w-4 h-4 mr-2" />
+              Novo Usuário
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Search */}
@@ -310,7 +338,7 @@ export function Users() {
       </Card>
 
       {/* Form Modal */}
-      {isFormOpen && (
+      {showModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <Card className="w-full max-w-md mx-4">
             <CardHeader>
@@ -353,7 +381,7 @@ export function Users() {
                   <label className="block text-sm font-medium mb-1">Perfil *</label>
                   <select
                     value={formData.perfil_id}
-                    onChange={(e) => setFormData({ ...formData, perfil_id: e.target.value })}
+                    onChange={(e) => setFormData({ ...formData, perfil_id: parseInt(e.target.value) })}
                     className="w-full px-3 py-2 border border-gray-300 rounded-md"
                   >
                     <option value="">Selecione um perfil</option>
@@ -369,7 +397,7 @@ export function Users() {
                   <Button type="submit" className="flex-1">
                     {editingUser ? 'Atualizar' : 'Criar'}
                   </Button>
-                  <Button type="button" variant="outline" onClick={() => setIsFormOpen(false)}>
+                  <Button type="button" variant="outline" onClick={() => setShowModal(false)}>
                     Cancelar
                   </Button>
                 </div>
@@ -378,6 +406,23 @@ export function Users() {
           </Card>
         </div>
       )}
+
+             {/* Permissions Manager Modal */}
+       {showPermissionsManager && (
+         <div 
+           className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+           onClick={() => setShowPermissionsManager(false)}
+         >
+           <div 
+             className="bg-white rounded-lg w-full max-w-6xl max-h-[90vh] overflow-hidden"
+             onClick={(e) => e.stopPropagation()}
+           >
+             <div className="p-6">
+               <PermissionsManager onClose={() => setShowPermissionsManager(false)} />
+             </div>
+           </div>
+         </div>
+       )}
     </div>
   );
 } 
